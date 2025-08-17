@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7B1B71E12E52784D008EDC0E /* Glob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B71E02E52784D008EDC0E /* Glob.swift */; };
 		7B5064B92BD9F236009CEFF9 /* FileOtter.docc in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064B82BD9F236009CEFF9 /* FileOtter.docc */; };
 		7B5064BF2BD9F236009CEFF9 /* FileOtter.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B5064B42BD9F236009CEFF9 /* FileOtter.framework */; };
 		7B5064C42BD9F236009CEFF9 /* FileOtterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064C32BD9F236009CEFF9 /* FileOtterTests.swift */; };
@@ -27,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		7B1B71E02E52784D008EDC0E /* Glob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glob.swift; sourceTree = "<group>"; };
 		7B5064B42BD9F236009CEFF9 /* FileOtter.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FileOtter.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B5064B72BD9F236009CEFF9 /* FileOtter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FileOtter.h; sourceTree = "<group>"; };
 		7B5064B82BD9F236009CEFF9 /* FileOtter.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = FileOtter.docc; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 				7B5064B82BD9F236009CEFF9 /* FileOtter.docc */,
 				7B5064D02BD9F322009CEFF9 /* File.swift */,
 				7B5064D22BD9F339009CEFF9 /* Dir.swift */,
+				7B1B71E02E52784D008EDC0E /* Glob.swift */,
 			);
 			path = FileOtter;
 			sourceTree = "<group>";
@@ -205,6 +208,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7B5064B92BD9F236009CEFF9 /* FileOtter.docc in Sources */,
+				7B1B71E12E52784D008EDC0E /* Glob.swift in Sources */,
 				7B5064D12BD9F322009CEFF9 /* File.swift in Sources */,
 				7B5064D32BD9F339009CEFF9 /* Dir.swift in Sources */,
 			);

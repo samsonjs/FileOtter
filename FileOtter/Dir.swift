@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Dir: Equatable, Hashable, RandomAccessCollection {
+public struct Dir: Equatable, Hashable, RandomAccessCollection, CustomStringConvertible, CustomDebugStringConvertible {
     public let startIndex: Int
 
     public let endIndex: Int
@@ -15,7 +15,7 @@ public struct Dir: Equatable, Hashable, RandomAccessCollection {
     public let url: URL
 
     public init(url: URL) throws {
-        self.init(url: url, children: try Dir.children(url))
+        try self.init(url: url, children: Dir.children(url))
     }
 
     private let children: [URL]
@@ -26,96 +26,124 @@ public struct Dir: Equatable, Hashable, RandomAccessCollection {
         startIndex = children.startIndex
         endIndex = children.endIndex
     }
+
+    public var description: String {
+        url.path
+    }
+
+    public var debugDescription: String {
+        "<Dir:\(url.path)>"
+    }
 }
 
 // MARK: - Well-known Directories
-extension Dir {
-    public static var caches: URL {
+
+public extension Dir {
+    static var caches: URL {
         URL.cachesDirectory
     }
 
-    public static var current: URL {
-        URL.currentDirectory()
-    }
-
-    public static var documents: URL {
+    static var documents: URL {
         URL.documentsDirectory
     }
 
-    public static var home: URL {
+    static var home: URL {
         URL.homeDirectory
     }
 
-    public static var library: URL {
+    static var library: URL {
         URL.libraryDirectory
     }
 
-    public static var pwd: URL {
-        .currentDirectory()
+    static var pwd: URL {
+        URL.currentDirectory()
     }
 
-    public static var getwd: URL {
-        .currentDirectory()
+    static var tmp: URL {
+        URL.temporaryDirectory
     }
 }
 
 // MARK: - Mutations
-extension Dir {
-    @discardableResult
-    public static func chdir(_ url: URL) -> Bool {
-        FileManager.default.changeCurrentDirectoryPath(url.path)
+
+public extension Dir {
+    static func chdir(_ url: URL) throws {
+        guard FileManager.default.changeCurrentDirectoryPath(url.path) else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
     @discardableResult
-    public static func chdir<T>(_ url: URL, block: (URL) -> T) -> T {
+    static func chdir<T>(_ url: URL, block: (URL) throws -> T) rethrows -> T {
         let previousDir = pwd
         FileManager.default.changeCurrentDirectoryPath(url.path)
         defer {
             FileManager.default.changeCurrentDirectoryPath(previousDir.path)
         }
-        return block(url)
+        return try block(url)
+    }
+
+    static func unlink(_ url: URL) throws {
+        try FileManager.default.removeItem(at: url)
+    }
+
+    static func rmdir(_ url: URL) throws {
+        try unlink(url)
+    }
+
+    static func mkdir(_ url: URL, permissions: Int = 0o755) throws {
+        let attributes: [FileAttributeKey: Any] = [
+            .posixPermissions: permissions,
+        ]
+        try FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: false,
+            attributes: attributes
+        )
     }
 
     @discardableResult
-    public static func unlink(_ url: URL) -> Bool {
-        do {
-            try FileManager.default.removeItem(at: url)
-            return true
-        } catch {
-            return false
+    static func mktmpdir(prefix: String = "d", suffix: String = "") throws -> URL {
+        let tmpBase = URL.temporaryDirectory
+        let dirName = suffix.isEmpty ? "\(prefix)-\(UUID().uuidString)" : "\(prefix)-\(UUID().uuidString)-\(suffix)"
+        let tmpDir = tmpBase.appendingPathComponent(dirName)
+        try FileManager.default.createDirectory(
+            at: tmpDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        return tmpDir
+    }
+
+    @discardableResult
+    static func mktmpdir<T>(
+        prefix: String = "d",
+        suffix: String = "",
+        _ block: (URL) throws -> T
+    ) throws -> T {
+        let tmpDir = try mktmpdir(prefix: prefix, suffix: suffix)
+        defer {
+            try? FileManager.default.removeItem(at: tmpDir)
         }
-    }
-
-    @discardableResult
-    public static func rmdir(_ url: URL) -> Bool {
-        unlink(url)
-    }
-
-    @discardableResult
-    public static func delete(_ url: URL) -> Bool {
-        unlink(url)
+        return try block(tmpDir)
     }
 }
 
 // MARK: - Reading Contents
-extension Dir {
-    public static func children(_ url: URL) throws -> [URL] {
+
+public extension Dir {
+    static func children(_ url: URL) throws -> [URL] {
         try FileManager.default
             .contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
     }
 
-    public static func entries(_ url: URL) throws -> [String] {
-        #warning("TODO: implement this ... maybe, it's dumb")
-        return []
-    }
-
-    public static func exists(_ url: URL) throws -> Bool {
+    static func exists(_ url: URL) throws -> Bool {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
         return exists && isDirectory.boolValue
     }
 
-    public static func isEmpty(_ url: URL) throws -> Bool {
+    static func isEmpty(_ url: URL) throws -> Bool {
         try FileManager.default
             .contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
             .isEmpty
@@ -123,28 +151,35 @@ extension Dir {
 }
 
 // MARK: - Globbing
-extension Dir {
-    public static func glob(base: URL? = nil, _ patterns: String...) -> [URL] {
+
+public extension Dir {
+    static func glob(base: URL? = nil, _ patterns: String...) -> [URL] {
         _glob(base: base, patterns: patterns)
     }
 
-    public static subscript(base: URL? = nil, _ patterns: String...) -> [URL] {
+    static subscript(base: URL?, _ patterns: String...) -> [URL] {
         _glob(base: base, patterns: patterns)
+    }
+
+    static subscript(_ patterns: String...) -> [URL] {
+        _glob(base: nil, patterns: Array(patterns))
     }
 
     private static func _glob(base: URL?, patterns: [String]) -> [URL] {
-        #warning("TODO: implement me")
-        return []
+        patterns.flatMap { pattern in
+            globstar(pattern, base: base)
+        }.map { URL(fileURLWithPath: $0) }
     }
 }
 
 // MARK: - RandomAccessCollection
-extension Dir {
-    public func makeIterator() -> any IteratorProtocol<URL> {
+
+public extension Dir {
+    func makeIterator() -> any IteratorProtocol<URL> {
         children.makeIterator()
     }
 
-    public subscript(position: Int) -> URL {
+    subscript(position: Int) -> URL {
         children[position]
     }
 }
