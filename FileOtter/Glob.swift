@@ -17,7 +17,7 @@ import Foundation
 /// Examples:
 ///   "src/**/*.swift"
 ///   "/var/log/**/app*.log"
-func globstar(_ pattern: String, base: URL? = nil) -> [URL] {
+func globstar(_ pattern: String, base: URL? = nil) -> [String] {
     // Normalize and split into path components
     let comps = pattern.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
 
