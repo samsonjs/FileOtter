@@ -3,18 +3,12 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7B1B71E12E52784D008EDC0E /* Glob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B71E02E52784D008EDC0E /* Glob.swift */; };
-		7B5064B92BD9F236009CEFF9 /* FileOtter.docc in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064B82BD9F236009CEFF9 /* FileOtter.docc */; };
 		7B5064BF2BD9F236009CEFF9 /* FileOtter.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B5064B42BD9F236009CEFF9 /* FileOtter.framework */; };
-		7B5064C42BD9F236009CEFF9 /* FileOtterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064C32BD9F236009CEFF9 /* FileOtterTests.swift */; };
-		7B5064C52BD9F236009CEFF9 /* FileOtter.h in Headers */ = {isa = PBXBuildFile; fileRef = 7B5064B72BD9F236009CEFF9 /* FileOtter.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		7B5064CF2BD9F2C0009CEFF9 /* Readme.md in Resources */ = {isa = PBXBuildFile; fileRef = 7B5064CE2BD9F2C0009CEFF9 /* Readme.md */; };
-		7B5064D12BD9F322009CEFF9 /* File.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064D02BD9F322009CEFF9 /* File.swift */; };
-		7B5064D32BD9F339009CEFF9 /* Dir.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5064D22BD9F339009CEFF9 /* Dir.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,16 +22,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		7B1B71E02E52784D008EDC0E /* Glob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glob.swift; sourceTree = "<group>"; };
 		7B5064B42BD9F236009CEFF9 /* FileOtter.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FileOtter.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		7B5064B72BD9F236009CEFF9 /* FileOtter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FileOtter.h; sourceTree = "<group>"; };
-		7B5064B82BD9F236009CEFF9 /* FileOtter.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = FileOtter.docc; sourceTree = "<group>"; };
 		7B5064BE2BD9F236009CEFF9 /* FileOtterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOtterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		7B5064C32BD9F236009CEFF9 /* FileOtterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOtterTests.swift; sourceTree = "<group>"; };
 		7B5064CE2BD9F2C0009CEFF9 /* Readme.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = Readme.md; sourceTree = "<group>"; };
-		7B5064D02BD9F322009CEFF9 /* File.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = File.swift; sourceTree = "<group>"; };
-		7B5064D22BD9F339009CEFF9 /* Dir.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dir.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7B1B74752E5E097B008EDC0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			publicHeaders = (
+				FileOtter.h,
+			);
+			target = 7B5064B32BD9F235009CEFF9 /* FileOtter */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		7B1B74612E5E0978008EDC0E /* FileOtterTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = FileOtterTests; sourceTree = "<group>"; };
+		7B1B746F2E5E097B008EDC0E /* FileOtter */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (7B1B74752E5E097B008EDC0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = FileOtter; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		7B5064B12BD9F235009CEFF9 /* Frameworks */ = {
@@ -62,8 +65,8 @@
 			isa = PBXGroup;
 			children = (
 				7B5064CE2BD9F2C0009CEFF9 /* Readme.md */,
-				7B5064B62BD9F236009CEFF9 /* FileOtter */,
-				7B5064C22BD9F236009CEFF9 /* FileOtterTests */,
+				7B1B746F2E5E097B008EDC0E /* FileOtter */,
+				7B1B74612E5E0978008EDC0E /* FileOtterTests */,
 				7B5064B52BD9F236009CEFF9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -77,26 +80,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		7B5064B62BD9F236009CEFF9 /* FileOtter */ = {
-			isa = PBXGroup;
-			children = (
-				7B5064B72BD9F236009CEFF9 /* FileOtter.h */,
-				7B5064B82BD9F236009CEFF9 /* FileOtter.docc */,
-				7B5064D02BD9F322009CEFF9 /* File.swift */,
-				7B5064D22BD9F339009CEFF9 /* Dir.swift */,
-				7B1B71E02E52784D008EDC0E /* Glob.swift */,
-			);
-			path = FileOtter;
-			sourceTree = "<group>";
-		};
-		7B5064C22BD9F236009CEFF9 /* FileOtterTests */ = {
-			isa = PBXGroup;
-			children = (
-				7B5064C32BD9F236009CEFF9 /* FileOtterTests.swift */,
-			);
-			path = FileOtterTests;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -104,7 +87,6 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7B5064C52BD9F236009CEFF9 /* FileOtter.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +106,9 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				7B1B746F2E5E097B008EDC0E /* FileOtter */,
+			);
 			name = FileOtter;
 			productName = FileOtter;
 			productReference = 7B5064B42BD9F236009CEFF9 /* FileOtter.framework */;
@@ -141,6 +126,9 @@
 			);
 			dependencies = (
 				7B5064C12BD9F236009CEFF9 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7B1B74612E5E0978008EDC0E /* FileOtterTests */,
 			);
 			name = FileOtterTests;
 			productName = FileOtterTests;
@@ -207,10 +195,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7B5064B92BD9F236009CEFF9 /* FileOtter.docc in Sources */,
-				7B1B71E12E52784D008EDC0E /* Glob.swift in Sources */,
-				7B5064D12BD9F322009CEFF9 /* File.swift in Sources */,
-				7B5064D32BD9F339009CEFF9 /* Dir.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,7 +202,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7B5064C42BD9F236009CEFF9 /* FileOtterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -439,7 +422,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X45WPY5JFZ;
@@ -461,7 +443,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X45WPY5JFZ;

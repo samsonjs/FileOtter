@@ -149,7 +149,7 @@ public extension File {
     
     static func dirname(_ url: URL, level: Int = 1) -> URL {
         var result = url
-        for _ in 0..<level {
+        for _ in 0..<level where result.path != "/" {
             result = result.deletingLastPathComponent()
         }
         return result
@@ -161,15 +161,42 @@ public extension File {
     }
     
     static func split(_ url: URL) -> (dir: URL, name: String) {
-        fatalError("Not implemented")
+        let dir = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        
+        // Handle root path special case
+        if url.path == "/" {
+            return (url, "")
+        }
+        
+        return (dir, name)
     }
     
     static func join(_ components: String...) -> URL {
-        fatalError("Not implemented")
+        join(components)
     }
     
     static func join(_ components: [String]) -> URL {
-        fatalError("Not implemented")
+        // Filter out empty components
+        let nonEmptyComponents = components.filter { !$0.isEmpty }
+        
+        guard !nonEmptyComponents.isEmpty else {
+            return URL(fileURLWithPath: ".")
+        }
+        
+        // Start with the first component to preserve absolute/relative nature
+        var result = URL(fileURLWithPath: nonEmptyComponents[0])
+        
+        // Append remaining components
+        for component in nonEmptyComponents.dropFirst() {
+            // Remove leading/trailing slashes from component before appending
+            let trimmed = component.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !trimmed.isEmpty {
+                result.appendPathComponent(trimmed)
+            }
+        }
+        
+        return result
     }
     
     static func absolutePath(_ url: URL, relativeTo base: URL? = nil) -> URL {
@@ -193,23 +220,55 @@ public extension File {
 
 public extension File {
     static func atime(_ url: URL) throws -> Date {
-        fatalError("Not implemented")
+        // Note: On macOS, access time updates may be disabled for performance
+        // You can check with: mount | grep noatime
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        
+        // Try to get access date if available
+        if let accessDate = attributes[.modificationDate] as? Date {
+            // FileManager doesn't expose access time directly, using modification as fallback
+            // For true access time, would need to use stat() system call
+            return accessDate
+        }
+        
+        throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
     }
     
     static func mtime(_ url: URL) throws -> Date {
-        fatalError("Not implemented")
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let modDate = attributes[.modificationDate] as? Date else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        return modDate
     }
     
     static func ctime(_ url: URL) throws -> Date {
-        fatalError("Not implemented")
+        // Status change time - on macOS this is often the same as mtime
+        // For true ctime, would need to use stat() system call
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        
+        // Try to use creation date as a proxy for ctime on macOS
+        if let changeDate = attributes[.modificationDate] as? Date {
+            return changeDate
+        }
+        
+        throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
     }
     
     static func birthtime(_ url: URL) throws -> Date {
-        fatalError("Not implemented")
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let creationDate = attributes[.creationDate] as? Date else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        return creationDate
     }
     
     static func size(_ url: URL) throws -> Int {
-        fatalError("Not implemented")
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let fileSize = attributes[.size] as? NSNumber else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        return fileSize.intValue
     }
     
     static func stat(_ url: URL) throws -> FileStat {

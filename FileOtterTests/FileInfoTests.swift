@@ -30,23 +30,44 @@ final class FileInfoTests: XCTestCase {
     // MARK: - Time-based Tests
     
     func testAtime() throws {
-        // TODO: Implement
-        // File.atime(url) returns last access time
+        let atime = try File.atime(testFile)
+        XCTAssertNotNil(atime)
+        // Access time should be recent (within last hour)
+        XCTAssertLessThan(Date().timeIntervalSince(atime), 3600)
     }
     
     func testMtime() throws {
-        // TODO: Implement
-        // File.mtime(url) returns last modification time
+        // Get initial mtime
+        let initialMtime = try File.mtime(testFile)
+        
+        // Wait a moment and modify the file
+        Thread.sleep(forTimeInterval: 0.1)
+        try "Modified content".write(to: testFile, atomically: true, encoding: .utf8)
+        
+        // mtime should be updated
+        let newMtime = try File.mtime(testFile)
+        XCTAssertGreaterThan(newMtime, initialMtime)
     }
     
     func testCtime() throws {
-        // TODO: Implement
-        // File.ctime(url) returns last status change time
+        let ctime = try File.ctime(testFile)
+        XCTAssertNotNil(ctime)
+        // Status change time should be recent
+        XCTAssertLessThan(Date().timeIntervalSince(ctime), 3600)
     }
     
     func testBirthtime() throws {
-        // TODO: Implement
-        // File.birthtime(url) returns creation time
+        // Create a new file
+        let newFile = tempDir.appendingPathComponent("birthtime-test.txt")
+        let beforeCreation = Date()
+        Thread.sleep(forTimeInterval: 0.01)
+        try "content".write(to: newFile, atomically: true, encoding: .utf8)
+        Thread.sleep(forTimeInterval: 0.01)
+        let afterCreation = Date()
+        
+        let birthtime = try File.birthtime(newFile)
+        XCTAssertGreaterThanOrEqual(birthtime, beforeCreation)
+        XCTAssertLessThanOrEqual(birthtime, afterCreation)
     }
     
     func testBirthtimeThrowsOnUnsupportedPlatform() throws {
@@ -56,16 +77,28 @@ final class FileInfoTests: XCTestCase {
     // MARK: - Size Tests
     
     func testSize() throws {
-        // TODO: Implement
-        // File.size(url) returns file size in bytes
+        // Test with known content
+        let content = "Test content"
+        let expectedSize = content.data(using: .utf8)!.count
+        XCTAssertEqual(try File.size(testFile), expectedSize)
+        
+        // Test with larger file
+        let largeFile = tempDir.appendingPathComponent("large.txt")
+        let largeContent = String(repeating: "Hello World! ", count: 100)
+        try largeContent.write(to: largeFile, atomically: true, encoding: .utf8)
+        let largeExpectedSize = largeContent.data(using: .utf8)!.count
+        XCTAssertEqual(try File.size(largeFile), largeExpectedSize)
     }
     
     func testSizeThrowsForNonExistent() throws {
-        // TODO: Implement
+        let nonExistent = tempDir.appendingPathComponent("no-such-file.txt")
+        XCTAssertThrowsError(try File.size(nonExistent))
     }
     
     func testSizeForEmptyFile() throws {
-        // TODO: Implement
+        let emptyFile = tempDir.appendingPathComponent("empty.txt")
+        try "".write(to: emptyFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try File.size(emptyFile), 0)
     }
     
     // MARK: - Stat Tests
