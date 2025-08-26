@@ -133,22 +133,35 @@ final class FileTypeTests: XCTestCase {
     // MARK: - Empty/Zero Tests
     
     func testIsEmpty() throws {
-        // TODO: Implement
-        // File.isEmpty(url) returns true for empty file
+        // Create empty file
+        let emptyFile = tempDir.appendingPathComponent("empty.txt")
+        try "".write(to: emptyFile, atomically: true, encoding: .utf8)
+        XCTAssertTrue(try File.isEmpty(emptyFile))
     }
     
     func testIsEmptyForNonEmpty() throws {
-        // TODO: Implement
-        // File.isEmpty(url) returns false for non-empty file
+        // testFile has content
+        XCTAssertFalse(try File.isEmpty(testFile))
+        
+        // Create another non-empty file
+        let nonEmptyFile = tempDir.appendingPathComponent("nonempty.txt")
+        try "Some content".write(to: nonEmptyFile, atomically: true, encoding: .utf8)
+        XCTAssertFalse(try File.isEmpty(nonEmptyFile))
     }
     
     func testIsEmptyThrowsForNonExistent() throws {
-        // TODO: Implement
+        let nonExistent = tempDir.appendingPathComponent("does-not-exist.txt")
+        XCTAssertThrowsError(try File.isEmpty(nonExistent))
     }
     
     func testIsZero() throws {
-        // TODO: Implement
-        // File.isZero(url) is alias for isEmpty
+        // Create empty file
+        let emptyFile = tempDir.appendingPathComponent("zero.txt")
+        try "".write(to: emptyFile, atomically: true, encoding: .utf8)
+        
+        // isZero is alias for isEmpty
+        XCTAssertTrue(try File.isZero(emptyFile))
+        XCTAssertFalse(try File.isZero(testFile))
     }
     
     // MARK: - ftype Tests

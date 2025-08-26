@@ -320,7 +320,8 @@ public extension File {
     }
     
     static func isEmpty(_ url: URL) throws -> Bool {
-        fatalError("Not implemented")
+        let size = try self.size(url)
+        return size == 0
     }
     
     // Ruby aliases
@@ -397,15 +398,16 @@ public extension File {
     }
     
     static func symlink(source: URL, destination: URL) throws {
-        fatalError("Not implemented")
+        try FileManager.default.createSymbolicLink(at: destination, withDestinationURL: source)
     }
     
     static func readlink(_ url: URL) throws -> URL {
-        fatalError("Not implemented")
+        let path = try FileManager.default.destinationOfSymbolicLink(atPath: url.path)
+        return URL(fileURLWithPath: path)
     }
     
     static func unlink(_ url: URL) throws {
-        fatalError("Not implemented")
+        try FileManager.default.removeItem(at: url)
     }
     
     static func delete(_ url: URL) throws {
@@ -413,7 +415,11 @@ public extension File {
     }
     
     static func rename(source: URL, destination: URL) throws {
-        fatalError("Not implemented")
+        // Use replaceItem - it works whether destination exists or not
+        // and provides atomic replacement when it does exist
+        _ = try FileManager.default.replaceItem(
+            at: destination, withItemAt: source, backupItemName: nil, resultingItemURL: nil
+        )
     }
     
     static func truncate(_ url: URL, to size: Int) throws {
@@ -421,7 +427,15 @@ public extension File {
     }
     
     static func touch(_ url: URL) throws {
-        fatalError("Not implemented")
+        let fm = FileManager.default
+        
+        if fm.fileExists(atPath: url.path) {
+            // Update modification time to current time
+            try fm.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+        } else {
+            // Create empty file
+            fm.createFile(atPath: url.path, contents: nil, attributes: nil)
+        }
     }
     
     static func utime(_ url: URL, atime: Date, mtime: Date) throws {
