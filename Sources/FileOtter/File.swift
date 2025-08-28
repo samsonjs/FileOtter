@@ -620,7 +620,7 @@ public struct FileStat {
     public let birthtime: Date? // Creation time (if available)
 }
 
-public struct FnmatchFlags: OptionSet {
+public struct FnmatchFlags: OptionSet, Sendable {
     public let rawValue: Int32
 
     public init(rawValue: Int32) {

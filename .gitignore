@@ -1,2 +1,15 @@
-build
-xcuserdata
+# Xcode
+xcuserdata/
+*.xcodeproj/
+*.xcworkspace/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Claude scratchpad
+claude-scratchpad/
