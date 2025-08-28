@@ -98,7 +98,7 @@ public extension Dir {
         try FileManager.default.createDirectory(
             at: url,
             withIntermediateDirectories: false,
-            attributes: attributes
+            attributes: attributes,
         )
     }
 
@@ -110,7 +110,7 @@ public extension Dir {
         try FileManager.default.createDirectory(
             at: tmpDir,
             withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
+            attributes: [.posixPermissions: 0o700],
         )
         return tmpDir
     }
@@ -119,7 +119,7 @@ public extension Dir {
     static func mktmpdir<T>(
         prefix: String = "d",
         suffix: String = "",
-        _ block: (URL) throws -> T
+        _ block: (URL) throws -> T,
     ) throws -> T {
         let tmpDir = try mktmpdir(prefix: prefix, suffix: suffix)
         defer {

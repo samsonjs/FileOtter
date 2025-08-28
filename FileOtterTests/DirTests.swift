@@ -1,5 +1,5 @@
 //
-//  FileOtterTests.swift
+//  DirTests.swift
 //  FileOtterTests
 //
 //  Created by Sami Samhuri on 2024-04-24.
@@ -145,7 +145,7 @@ final class DirTests: XCTestCase {
         let children = try Dir.children(tempDir)
         XCTAssertEqual(children.count, 3)
 
-        let childNames = children.map { $0.lastPathComponent }.sorted()
+        let childNames = children.map(\.lastPathComponent).sorted()
         XCTAssertEqual(childNames, ["file1.txt", "file2.txt", "subdir"])
     }
 
@@ -240,7 +240,7 @@ final class DirTests: XCTestCase {
         let results = Dir.glob(base: tempDir, "*.txt")
         XCTAssertEqual(results.count, 2)
 
-        let filenames = results.map { $0.lastPathComponent }.sorted()
+        let filenames = results.map(\.lastPathComponent).sorted()
         XCTAssertEqual(filenames, ["file1.txt", "file2.txt"])
     }
 
@@ -266,7 +266,7 @@ final class DirTests: XCTestCase {
         let results = Dir.glob(base: tempDir, "??.txt")
         XCTAssertEqual(results.count, 2)
 
-        let filenames = results.map { $0.lastPathComponent }.sorted()
+        let filenames = results.map(\.lastPathComponent).sorted()
         XCTAssertEqual(filenames, ["a1.txt", "b2.txt"])
     }
 
@@ -464,7 +464,7 @@ final class DirTests: XCTestCase {
         XCTAssertEqual(result, "block result")
         XCTAssertTrue(fileCreated)
 
-        if let tmpDirInBlock = tmpDirInBlock {
+        if let tmpDirInBlock {
             XCTAssertFalse(FileManager.default.fileExists(atPath: tmpDirInBlock.path))
         }
     }

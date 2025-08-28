@@ -23,7 +23,7 @@ func globstar(_ pattern: String, base: URL? = nil) -> [String] {
 
     var results: [String] = []
     var seenDirs = Set<String>() // canonical paths to avoid cycles if symlinks appear
-    
+
     // Cache frequently used objects
     let fm = FileManager.default
     let globMetaChars = CharacterSet(charactersIn: "*?[")
@@ -79,7 +79,7 @@ func globstar(_ pattern: String, base: URL? = nil) -> [String] {
             seenDirs.insert(key)
 
             if isDir(dirPath) {
-                let dirPathNS = dirPath as NSString  // Cache the NSString conversion
+                let dirPathNS = dirPath as NSString // Cache the NSString conversion
                 for entry in listDir(dirPath) {
                     let child = dirPathNS.appendingPathComponent(entry)
                     if isDir(child) {
@@ -102,7 +102,7 @@ func globstar(_ pattern: String, base: URL? = nil) -> [String] {
         // Segment glob (*, ?, []) matches names in this directory level only
         let dirPath = base.isEmpty ? "/" : base
         if !isDir(dirPath) { return }
-        let dirPathNS = dirPath as NSString  // Cache the NSString conversion
+        let dirPathNS = dirPath as NSString // Cache the NSString conversion
         for entry in listDir(dirPath) {
             if matchSegment(entry, pat: part) {
                 let next = dirPathNS.appendingPathComponent(entry)
