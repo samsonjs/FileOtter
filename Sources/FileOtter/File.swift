@@ -372,9 +372,10 @@ public extension File {
     }
 
     static func isFile(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-        return exists && !isDirectory.boolValue
+        var statBuf = stat()
+        let result = url.path.withCString { stat($0, &statBuf) }
+        guard result == 0 else { return false }
+        return (statBuf.st_mode & S_IFMT) == S_IFREG
     }
 
     static func isDirectory(_ url: URL) -> Bool {
@@ -507,24 +508,100 @@ public extension File {
 // MARK: - Static File Operations
 
 public extension File {
-    static func chmod(_: URL, permissions _: Int) throws {
-        fatalError("Not implemented")
+    static func chmod(_ url: URL, permissions: Int) throws {
+        let result = url.path.withCString { Darwin.chmod($0, mode_t(permissions)) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func chown(_: URL, owner _: Int? = nil, group _: Int? = nil) throws {
-        fatalError("Not implemented")
+    static func chown(_ url: URL, owner: Int? = nil, group: Int? = nil) throws {
+        // Get current ownership if not changing both
+        var currentOwner: uid_t = 0
+        var currentGroup: gid_t = 0
+        
+        if owner == nil || group == nil {
+            var statBuf = stat()
+            let result = url.path.withCString { stat($0, &statBuf) }
+            guard result == 0 else {
+                throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+            }
+            currentOwner = statBuf.st_uid
+            currentGroup = statBuf.st_gid
+        }
+        
+        let newOwner = owner.map { uid_t($0) } ?? currentOwner
+        let newGroup = group.map { gid_t($0) } ?? currentGroup
+        
+        let result = url.path.withCString { Darwin.chown($0, newOwner, newGroup) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func lchmod(_: URL, permissions _: Int) throws {
-        fatalError("Not implemented")
+    static func lchmod(_ url: URL, permissions: Int) throws {
+        // lchmod is not available on all systems, use lchflags as workaround
+        // or fall back to fchmodat with AT_SYMLINK_NOFOLLOW
+        #if os(macOS)
+        // macOS doesn't have lchmod, permissions on symlinks are ignored
+        // We could use fchmodat with AT_SYMLINK_NOFOLLOW but it's not always available
+        // For now, this is a no-op on symlinks as per macOS behavior
+        var statBuf = stat()
+        let result = url.path.withCString { lstat($0, &statBuf) }
+        guard result == 0 else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        
+        // If it's not a symlink, use regular chmod
+        if (statBuf.st_mode & S_IFMT) != S_IFLNK {
+            try chmod(url, permissions: permissions)
+        }
+        // For symlinks, silently succeed (macOS behavior)
+        #else
+        let result = url.path.withCString { lchmod($0, mode_t(permissions)) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        #endif
     }
 
-    static func lchown(_: URL, owner _: Int? = nil, group _: Int? = nil) throws {
-        fatalError("Not implemented")
+    static func lchown(_ url: URL, owner: Int? = nil, group: Int? = nil) throws {
+        // Get current ownership if not changing both
+        var currentOwner: uid_t = 0
+        var currentGroup: gid_t = 0
+        
+        if owner == nil || group == nil {
+            var statBuf = stat()
+            let result = url.path.withCString { lstat($0, &statBuf) }
+            guard result == 0 else {
+                throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+            }
+            currentOwner = statBuf.st_uid
+            currentGroup = statBuf.st_gid
+        }
+        
+        let newOwner = owner.map { uid_t($0) } ?? currentOwner
+        let newGroup = group.map { gid_t($0) } ?? currentGroup
+        
+        let result = url.path.withCString { Darwin.lchown($0, newOwner, newGroup) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func link(source _: URL, destination _: URL) throws {
-        fatalError("Not implemented")
+    static func link(source: URL, destination: URL) throws {
+        // Create hard link
+        let result = source.path.withCString { sourcePath in
+            destination.path.withCString { destPath in
+                Darwin.link(sourcePath, destPath)
+            }
+        }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [
+                NSFilePathErrorKey: destination.path,
+                NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            ])
+        }
     }
 
     static func symlink(source: URL, destination: URL) throws {
@@ -552,8 +629,11 @@ public extension File {
         )
     }
 
-    static func truncate(_: URL, to _: Int) throws {
-        fatalError("Not implemented")
+    static func truncate(_ url: URL, to size: Int) throws {
+        let result = url.path.withCString { Darwin.truncate($0, off_t(size)) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
     static func touch(_ url: URL) throws {
@@ -568,36 +648,98 @@ public extension File {
         }
     }
 
-    static func utime(_: URL, atime _: Date, mtime _: Date) throws {
-        fatalError("Not implemented")
+    static func utime(_ url: URL, atime: Date, mtime: Date) throws {
+        var times = [timeval](repeating: timeval(), count: 2)
+        
+        // Access time
+        times[0].tv_sec = Int(atime.timeIntervalSince1970)
+        times[0].tv_usec = Int32((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        
+        // Modification time
+        times[1].tv_sec = Int(mtime.timeIntervalSince1970)
+        times[1].tv_usec = Int32((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        
+        let result = url.path.withCString { path in
+            times.withUnsafeBufferPointer { timesPtr in
+                Darwin.utimes(path, timesPtr.baseAddress)
+            }
+        }
+        
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func lutime(_: URL, atime _: Date, mtime _: Date) throws {
-        fatalError("Not implemented")
+    static func lutime(_ url: URL, atime: Date, mtime: Date) throws {
+        // lutimes sets times on symlink itself (not the target)
+        var times = [timeval](repeating: timeval(), count: 2)
+        
+        // Access time
+        times[0].tv_sec = Int(atime.timeIntervalSince1970)
+        times[0].tv_usec = Int32((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        
+        // Modification time
+        times[1].tv_sec = Int(mtime.timeIntervalSince1970)
+        times[1].tv_usec = Int32((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        
+        let result = url.path.withCString { path in
+            times.withUnsafeBufferPointer { timesPtr in
+                Darwin.lutimes(path, timesPtr.baseAddress)
+            }
+        }
+        
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func mkfifo(_: URL, permissions _: Int = 0o666) throws {
-        fatalError("Not implemented")
+    static func mkfifo(_ url: URL, permissions: Int = 0o666) throws {
+        let result = url.path.withCString { Darwin.mkfifo($0, mode_t(permissions)) }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    static func identical(_: URL, _: URL) throws -> Bool {
-        fatalError("Not implemented")
+    static func identical(_ url1: URL, _ url2: URL) throws -> Bool {
+        var stat1 = stat()
+        var stat2 = stat()
+        
+        let result1 = url1.path.withCString { stat($0, &stat1) }
+        guard result1 == 0 else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url1.path])
+        }
+        
+        let result2 = url2.path.withCString { stat($0, &stat2) }
+        guard result2 == 0 else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url2.path])
+        }
+        
+        // Files are identical if they have the same device and inode
+        return stat1.st_dev == stat2.st_dev && stat1.st_ino == stat2.st_ino
     }
 
     static func umask() -> Int {
-        fatalError("Not implemented")
+        // Get current umask by setting and restoring
+        let current = Darwin.umask(0)
+        Darwin.umask(current)
+        return Int(current)
     }
 
-    static func umask(_: Int) -> Int {
-        fatalError("Not implemented")
+    static func umask(_ mask: Int) -> Int {
+        let oldMask = Darwin.umask(mode_t(mask))
+        return Int(oldMask)
     }
 }
 
 // MARK: - Pattern Matching
 
 public extension File {
-    static func fnmatch(pattern _: String, path _: String, flags _: FnmatchFlags = []) -> Bool {
-        fatalError("Not implemented")
+    static func fnmatch(pattern: String, path: String, flags: FnmatchFlags = []) -> Bool {
+        pattern.withCString { patternPtr in
+            path.withCString { pathPtr in
+                Darwin.fnmatch(patternPtr, pathPtr, flags.rawValue) == 0
+            }
+        }
     }
 }
 
@@ -627,12 +769,11 @@ public struct FnmatchFlags: OptionSet, Sendable {
         self.rawValue = rawValue
     }
 
-    public static let pathname = FnmatchFlags(rawValue: 1 << 0) // FNM_PATHNAME
-    public static let noescape = FnmatchFlags(rawValue: 1 << 1) // FNM_NOESCAPE
-    public static let period = FnmatchFlags(rawValue: 1 << 2) // FNM_PERIOD
-    public static let casefold = FnmatchFlags(rawValue: 1 << 3) // FNM_CASEFOLD
-    public static let extglob = FnmatchFlags(rawValue: 1 << 4) // FNM_EXTGLOB
-    public static let dotmatch = FnmatchFlags(rawValue: 1 << 5) // FNM_DOTMATCH (custom)
+    public static let pathname = FnmatchFlags(rawValue: FNM_PATHNAME)
+    public static let noescape = FnmatchFlags(rawValue: FNM_NOESCAPE)
+    public static let period = FnmatchFlags(rawValue: FNM_PERIOD)
+    public static let casefold = FnmatchFlags(rawValue: FNM_CASEFOLD)
+    public static let leadingDir = FnmatchFlags(rawValue: FNM_LEADING_DIR)
 }
 
 public enum LockOperation {

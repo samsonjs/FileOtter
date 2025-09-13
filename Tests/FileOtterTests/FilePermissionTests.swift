@@ -188,56 +188,154 @@ final class FilePermissionTests: XCTestCase {
     // MARK: - chmod Tests
 
     func testChmod() throws {
-        // TODO: Implement
-        // File.chmod(url, permissions) changes file permissions
+        // Change file to read-only
+        try File.chmod(testFile, permissions: 0o444)
+        
+        // Verify permissions changed
+        let stat = try File.fileStatus(testFile)
+        let perms = stat.mode & 0o777
+        XCTAssertEqual(perms, 0o444)
+        
+        // File should still be readable but not writable
+        XCTAssertTrue(File.isReadable(testFile))
+        XCTAssertFalse(File.isWritable(testFile))
+        
+        // Change back to read-write
+        try File.chmod(testFile, permissions: 0o644)
+        let stat2 = try File.fileStatus(testFile)
+        let perms2 = stat2.mode & 0o777
+        XCTAssertEqual(perms2, 0o644)
     }
 
     func testChmodThrowsForNonExistent() throws {
-        // TODO: Implement
+        let nonExistent = tempDir.appendingPathComponent("does-not-exist.txt")
+        XCTAssertThrowsError(try File.chmod(nonExistent, permissions: 0o644))
     }
 
     func testLchmod() throws {
-        // TODO: Implement
-        // File.lchmod(url, permissions) changes symlink permissions
+        // Create a symlink
+        let link = tempDir.appendingPathComponent("test-link")
+        try File.symlink(source: testFile, destination: link)
+        
+        // On macOS, lchmod is a no-op for symlinks
+        // This should not throw but also won't change symlink permissions
+        try File.lchmod(link, permissions: 0o777)
+        
+        // The target file permissions should not be affected
+        let targetStat = try File.fileStatus(testFile)
+        let targetPerms = targetStat.mode & 0o777
+        XCTAssertNotEqual(targetPerms, 0o777)
     }
 
     func testInstanceChmod() throws {
-        // TODO: Implement
-        // file.chmod(permissions) changes open file permissions
+        // Skip for now as it requires File instance implementation
+        throw XCTSkip("Instance methods not yet implemented")
     }
 
     // MARK: - chown Tests
 
     func testChown() throws {
-        // TODO: Implement
-        // File.chown(url, owner, group) changes ownership
-        // Note: May require special privileges
+        // Get current ownership
+        let stat = try File.fileStatus(testFile)
+        let currentUid = stat.uid
+        let currentGid = stat.gid
+        
+        // Try to set to same owner/group (should always succeed)
+        try File.chown(testFile, owner: currentUid, group: currentGid)
+        
+        // Verify ownership unchanged
+        let newStat = try File.fileStatus(testFile)
+        XCTAssertEqual(newStat.uid, currentUid)
+        XCTAssertEqual(newStat.gid, currentGid)
+        
+        // Note: Changing to different owner usually requires root privileges
+        // So we can't test that in normal unit tests
     }
 
     func testChownWithNilValues() throws {
-        // TODO: Implement
-        // nil owner or group means don't change that value
+        // Get current ownership
+        let stat = try File.fileStatus(testFile)
+        let currentUid = stat.uid
+        let currentGid = stat.gid
+        
+        // Change only owner (group stays same)
+        try File.chown(testFile, owner: currentUid, group: nil)
+        let stat1 = try File.fileStatus(testFile)
+        XCTAssertEqual(stat1.uid, currentUid)
+        XCTAssertEqual(stat1.gid, currentGid)
+        
+        // Change only group (owner stays same)
+        try File.chown(testFile, owner: nil, group: currentGid)
+        let stat2 = try File.fileStatus(testFile)
+        XCTAssertEqual(stat2.uid, currentUid)
+        XCTAssertEqual(stat2.gid, currentGid)
+        
+        // Change neither (no-op)
+        try File.chown(testFile, owner: nil, group: nil)
+        let stat3 = try File.fileStatus(testFile)
+        XCTAssertEqual(stat3.uid, currentUid)
+        XCTAssertEqual(stat3.gid, currentGid)
     }
 
     func testLchown() throws {
-        // TODO: Implement
-        // File.lchown(url, owner, group) changes symlink ownership
+        // Create a symlink
+        let link = tempDir.appendingPathComponent("owner-link")
+        try File.symlink(source: testFile, destination: link)
+        
+        // Get current ownership of symlink
+        let linkStat = try File.linkStatus(link)
+        let currentUid = linkStat.uid
+        let currentGid = linkStat.gid
+        
+        // Try to set to same owner/group (should always succeed)
+        try File.lchown(link, owner: currentUid, group: currentGid)
+        
+        // Verify symlink ownership unchanged
+        let newLinkStat = try File.linkStatus(link)
+        XCTAssertEqual(newLinkStat.uid, currentUid)
+        XCTAssertEqual(newLinkStat.gid, currentGid)
+        
+        // Target file ownership should not be affected
+        let targetStat = try File.fileStatus(testFile)
+        XCTAssertEqual(targetStat.uid, currentUid)
+        XCTAssertEqual(targetStat.gid, currentGid)
     }
 
     func testInstanceChown() throws {
-        // TODO: Implement
-        // file.chown(owner, group) changes open file ownership
+        // Skip for now as it requires File instance implementation
+        throw XCTSkip("Instance methods not yet implemented")
     }
 
     // MARK: - umask Tests
 
     func testUmask() throws {
-        // TODO: Implement
-        // File.umask() returns current umask
+        // Get current umask
+        let currentMask = File.umask()
+        
+        // Umask should be a reasonable value (typically 0o022 or 0o002)
+        XCTAssertGreaterThanOrEqual(currentMask, 0)
+        XCTAssertLessThan(currentMask, 0o777)
     }
 
     func testUmaskSet() throws {
-        // TODO: Implement
-        // File.umask(mask) sets umask and returns previous value
+        // Get current umask
+        let originalMask = File.umask()
+        
+        // Set new umask
+        let newMask = 0o027
+        let returnedMask = File.umask(newMask)
+        
+        // Returned value should be the old mask
+        XCTAssertEqual(returnedMask, originalMask)
+        
+        // Current mask should be the new value
+        let currentMask = File.umask()
+        XCTAssertEqual(currentMask, newMask)
+        
+        // Restore original umask
+        _ = File.umask(originalMask)
+        
+        // Verify restoration
+        XCTAssertEqual(File.umask(), originalMask)
     }
 }
