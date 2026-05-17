@@ -159,52 +159,105 @@ final class FileInfoTests: XCTestCase {
     // MARK: - Instance Method Tests
 
     func testInstanceAtime() throws {
-        // TODO: Implement
-        // file.atime returns access time
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        XCTAssertLessThan(Date().timeIntervalSince(file.atime), 3600)
     }
 
     func testInstanceMtime() throws {
-        // TODO: Implement
-        // file.mtime returns modification time
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        let viaInstance = file.mtime
+        let viaStatic = try File.mtime(testFile)
+        // Same file, same mtime (within sub-second precision).
+        XCTAssertEqual(viaInstance.timeIntervalSince1970, viaStatic.timeIntervalSince1970, accuracy: 1.0)
     }
 
     func testInstanceCtime() throws {
-        // TODO: Implement
-        // file.ctime returns status change time
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        XCTAssertLessThan(Date().timeIntervalSince(file.ctime), 3600)
     }
 
     func testInstanceBirthtime() throws {
-        // TODO: Implement
-        // file.birthtime returns creation time
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        let viaInstance = file.birthtime
+        let viaStatic = try File.birthtime(testFile)
+        XCTAssertEqual(viaInstance.timeIntervalSince1970, viaStatic.timeIntervalSince1970, accuracy: 1.0)
     }
 
     func testInstanceSize() throws {
-        // TODO: Implement
-        // file.size returns file size
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        XCTAssertEqual(file.size, "Test content".utf8.count)
     }
 
     func testInstanceStat() throws {
-        // TODO: Implement
-        // file.stat() returns FileStat object
+        let file = try File(url: testFile, mode: .read)
+        defer { try? file.close() }
+        let stat = try file.fileStat()
+        XCTAssertEqual(stat.size, 12)
+        XCTAssertGreaterThan(stat.ino, 0)
     }
 
     func testInstanceLstat() throws {
-        // TODO: Implement
-        // file.lstat() doesn't follow symlinks
+        // Create a symlink and open the symlink path. instance lstat reports the
+        // *link* itself; instance fileStat follows it to the target.
+        let target = tempDir.appendingPathComponent("target.txt")
+        try "This is the target file content".write(to: target, atomically: true, encoding: .utf8)
+        let link = tempDir.appendingPathComponent("link.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        let file = try File(url: link, mode: .read)
+        defer { try? file.close() }
+
+        let viaStat = try file.fileStat()
+        let viaLstat = try file.fileLstat()
+        XCTAssertNotEqual(viaLstat.size, viaStat.size)
+        let isLink = (viaLstat.mode & 0o170000) == 0o120000 // S_IFLNK
+        XCTAssertTrue(isLink)
     }
 
     // MARK: - FileStat Tests
 
     func testFileStatProperties() throws {
-        // TODO: Implement
-        // Verify all FileStat properties are populated correctly
+        let stat = try File.fileStatus(testFile)
+        // Every field should be populated with something sensible.
+        XCTAssertGreaterThan(stat.ino, 0)
+        XCTAssertGreaterThan(stat.nlink, 0)
+        XCTAssertGreaterThanOrEqual(stat.uid, 0)
+        XCTAssertGreaterThanOrEqual(stat.gid, 0)
+        XCTAssertEqual(stat.size, 12)
+        XCTAssertGreaterThan(stat.blksize, 0)
+        XCTAssertGreaterThanOrEqual(stat.blocks, 0)
+        // Mode contains both type bits and permission bits.
+        let isRegularFile = (stat.mode & 0o170000) == 0o100000
+        XCTAssertTrue(isRegularFile)
+        // Times should be recent.
+        XCTAssertLessThan(Date().timeIntervalSince(stat.atime), 3600)
+        XCTAssertLessThan(Date().timeIntervalSince(stat.mtime), 3600)
+        XCTAssertLessThan(Date().timeIntervalSince(stat.ctime), 3600)
     }
 
     func testFileStatForDirectory() throws {
-        // TODO: Implement
+        let stat = try File.fileStatus(tempDir)
+        let isDirectory = (stat.mode & 0o170000) == 0o040000
+        XCTAssertTrue(isDirectory)
     }
 
     func testFileStatForSymlink() throws {
-        // TODO: Implement
+        let target = tempDir.appendingPathComponent("target2.txt")
+        try "x".write(to: target, atomically: true, encoding: .utf8)
+        let link = tempDir.appendingPathComponent("link2.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        // fileStatus follows the symlink; linkStatus inspects the link itself.
+        let followed = try File.fileStatus(link)
+        let linkOnly = try File.linkStatus(link)
+        let followedIsRegular = (followed.mode & 0o170000) == 0o100000
+        let linkIsSymlink = (linkOnly.mode & 0o170000) == 0o120000
+        XCTAssertTrue(followedIsRegular)
+        XCTAssertTrue(linkIsSymlink)
     }
 }

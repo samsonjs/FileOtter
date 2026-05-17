@@ -79,23 +79,31 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
     // MARK: - Instance Properties
 
     public var atime: Date {
-        fatalError("Not implemented")
+        Date(timeIntervalSince1970: TimeInterval(rawStat().st_atimespec.tv_sec))
     }
 
     public var mtime: Date {
-        fatalError("Not implemented")
+        Date(timeIntervalSince1970: TimeInterval(rawStat().st_mtimespec.tv_sec))
     }
 
     public var ctime: Date {
-        fatalError("Not implemented")
+        Date(timeIntervalSince1970: TimeInterval(rawStat().st_ctimespec.tv_sec))
     }
 
     public var birthtime: Date {
-        fatalError("Not implemented")
+        Date(timeIntervalSince1970: TimeInterval(rawStat().st_birthtimespec.tv_sec))
     }
 
     public var size: Int {
-        fatalError("Not implemented")
+        Int(rawStat().st_size)
+    }
+
+    private func rawStat() -> stat {
+        precondition(fd >= 0, "File is closed")
+        var buf = stat()
+        let result = fstat(fd, &buf)
+        precondition(result == 0, "fstat failed on open fd \(fd): errno \(errno)")
+        return buf
     }
 
     // MARK: - Instance Methods
@@ -126,11 +134,20 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
     }
 
     public func fileStat() throws -> FileStat {
-        fatalError("Not implemented")
+        guard fd >= 0 else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        var buf = stat()
+        guard fstat(fd, &buf) == 0 else {
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        return FileStat(buf)
     }
 
     public func fileLstat() throws -> FileStat {
-        fatalError("Not implemented")
+        // No flstat(2) exists, and an open fd has already followed any symlinks.
+        // Inspect the original path with lstat to report on the link itself.
+        try File.linkStatus(url)
     }
 
     public func close() throws {
@@ -374,55 +391,19 @@ public extension File {
     }
 
     static func fileStatus(_ url: URL) throws -> FileStat {
-        var statBuf = stat()
-        let result = url.path.withCString { stat($0, &statBuf) }
-
-        guard result == 0 else {
+        var buf = stat()
+        guard url.path.withCString({ stat($0, &buf) }) == 0 else {
             throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
-
-        return FileStat(
-            dev: Int(statBuf.st_dev),
-            ino: Int(statBuf.st_ino),
-            mode: Int(statBuf.st_mode),
-            nlink: Int(statBuf.st_nlink),
-            uid: Int(statBuf.st_uid),
-            gid: Int(statBuf.st_gid),
-            rdev: Int(statBuf.st_rdev),
-            size: Int64(statBuf.st_size),
-            blksize: Int(statBuf.st_blksize),
-            blocks: Int64(statBuf.st_blocks),
-            atime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_atimespec.tv_sec)),
-            mtime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_mtimespec.tv_sec)),
-            ctime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_ctimespec.tv_sec)),
-            birthtime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_birthtimespec.tv_sec)),
-        )
+        return FileStat(buf)
     }
 
     static func linkStatus(_ url: URL) throws -> FileStat {
-        var statBuf = stat()
-        let result = url.path.withCString { lstat($0, &statBuf) }
-
-        guard result == 0 else {
+        var buf = stat()
+        guard url.path.withCString({ lstat($0, &buf) }) == 0 else {
             throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
-
-        return FileStat(
-            dev: Int(statBuf.st_dev),
-            ino: Int(statBuf.st_ino),
-            mode: Int(statBuf.st_mode),
-            nlink: Int(statBuf.st_nlink),
-            uid: Int(statBuf.st_uid),
-            gid: Int(statBuf.st_gid),
-            rdev: Int(statBuf.st_rdev),
-            size: Int64(statBuf.st_size),
-            blksize: Int(statBuf.st_blksize),
-            blocks: Int64(statBuf.st_blocks),
-            atime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_atimespec.tv_sec)),
-            mtime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_mtimespec.tv_sec)),
-            ctime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_ctimespec.tv_sec)),
-            birthtime: Date(timeIntervalSince1970: TimeInterval(statBuf.st_birthtimespec.tv_sec)),
-        )
+        return FileStat(buf)
     }
 }
 
@@ -822,6 +803,45 @@ public struct FileStat {
     public let mtime: Date // Last modification time
     public let ctime: Date // Last status change time
     public let birthtime: Date? // Creation time (if available)
+
+    public init(dev: Int, ino: Int, mode: Int, nlink: Int, uid: Int, gid: Int, rdev: Int,
+                size: Int64, blksize: Int, blocks: Int64,
+                atime: Date, mtime: Date, ctime: Date, birthtime: Date?)
+    {
+        self.dev = dev
+        self.ino = ino
+        self.mode = mode
+        self.nlink = nlink
+        self.uid = uid
+        self.gid = gid
+        self.rdev = rdev
+        self.size = size
+        self.blksize = blksize
+        self.blocks = blocks
+        self.atime = atime
+        self.mtime = mtime
+        self.ctime = ctime
+        self.birthtime = birthtime
+    }
+
+    init(_ buf: stat) {
+        self.init(
+            dev: Int(buf.st_dev),
+            ino: Int(buf.st_ino),
+            mode: Int(buf.st_mode),
+            nlink: Int(buf.st_nlink),
+            uid: Int(buf.st_uid),
+            gid: Int(buf.st_gid),
+            rdev: Int(buf.st_rdev),
+            size: Int64(buf.st_size),
+            blksize: Int(buf.st_blksize),
+            blocks: Int64(buf.st_blocks),
+            atime: Date(timeIntervalSince1970: TimeInterval(buf.st_atimespec.tv_sec)),
+            mtime: Date(timeIntervalSince1970: TimeInterval(buf.st_mtimespec.tv_sec)),
+            ctime: Date(timeIntervalSince1970: TimeInterval(buf.st_ctimespec.tv_sec)),
+            birthtime: Date(timeIntervalSince1970: TimeInterval(buf.st_birthtimespec.tv_sec)),
+        )
+    }
 }
 
 public struct FnmatchFlags: OptionSet, Sendable {
