@@ -8,6 +8,14 @@
 @testable import FileOtter
 import XCTest
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
+private var runningAsRoot: Bool { getuid() == 0 }
+
 final class FilePermissionTests: XCTestCase {
     var tempDir: URL!
     var testFile: URL!
@@ -53,7 +61,8 @@ final class FilePermissionTests: XCTestCase {
         // Files we created should be writable
         XCTAssertTrue(File.isWritable(testFile))
 
-        // System files are generally not writable
+        // System files are generally not writable — but root bypasses checks.
+        try XCTSkipIf(runningAsRoot, "root can write to anything")
         XCTAssertFalse(File.isWritable(URL(fileURLWithPath: "/etc/hosts")))
 
         // Non-existent files are not writable
@@ -190,16 +199,18 @@ final class FilePermissionTests: XCTestCase {
     func testChmod() throws {
         // Change file to read-only
         try File.chmod(testFile, permissions: 0o444)
-        
-        // Verify permissions changed
+
         let stat = try File.fileStatus(testFile)
         let perms = stat.mode & 0o777
         XCTAssertEqual(perms, 0o444)
-        
-        // File should still be readable but not writable
+
         XCTAssertTrue(File.isReadable(testFile))
-        XCTAssertFalse(File.isWritable(testFile))
-        
+        // Root bypasses POSIX permission checks, so isWritable returns true
+        // even with 0o444 — assert only when running unprivileged.
+        if !runningAsRoot {
+            XCTAssertFalse(File.isWritable(testFile))
+        }
+
         // Change back to read-write
         try File.chmod(testFile, permissions: 0o644)
         let stat2 = try File.fileStatus(testFile)
@@ -213,15 +224,14 @@ final class FilePermissionTests: XCTestCase {
     }
 
     func testLchmod() throws {
-        // Create a symlink
+        // The invariant under test is that lchmod does NOT touch the target
+        // file's permissions, no matter how the underlying syscall behaves.
+        // macOS treats lchmod on a symlink as a no-op; Linux's lchmod stub
+        // returns ENOTSUP on most filesystems. Either way, the target stays put.
         let link = tempDir.appendingPathComponent("test-link")
         try File.symlink(source: testFile, destination: link)
-        
-        // On macOS, lchmod is a no-op for symlinks
-        // This should not throw but also won't change symlink permissions
-        try File.lchmod(link, permissions: 0o777)
-        
-        // The target file permissions should not be affected
+        _ = try? File.lchmod(link, permissions: 0o777)
+
         let targetStat = try File.fileStatus(testFile)
         let targetPerms = targetStat.mode & 0o777
         XCTAssertNotEqual(targetPerms, 0o777)

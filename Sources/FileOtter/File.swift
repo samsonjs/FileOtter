@@ -5,12 +5,88 @@
 //  Created by Sami Samhuri on 2025-08-19.
 //
 
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 
-// `Darwin.flock` is ambiguous — it names both `struct flock` (record locking) and the
-// BSD `flock(2)` function. Bind the function under a unique Swift name.
-@_silgen_name("flock") private func bsdFlock(_ fd: Int32, _ operation: Int32) -> Int32
+// `flock` is ambiguous in the libc module map — it names both `struct flock`
+// (record locking, from <fcntl.h>) and the BSD `flock(2)` function. Bind the
+// function under a unique Swift name. The symbol exists on both Darwin and
+// Linux glibc.
+@_silgen_name("flock") private func sysFlock(_ fd: Int32, _ operation: Int32) -> Int32
+
+// `umask` and `fnmatch` collide with methods of the same name on `File`.
+// Unqualified calls inside those methods would recurse instead of reaching
+// libc, so bind them under unique Swift names.
+@_silgen_name("umask") private func libcUmask(_ mask: mode_t) -> mode_t
+@_silgen_name("fnmatch") private func libcFnmatch(_ pattern: UnsafePointer<CChar>?, _ path: UnsafePointer<CChar>?, _ flags: Int32) -> Int32
+@_silgen_name("mkfifo") private func libcMkfifo(_ path: UnsafePointer<CChar>?, _ mode: mode_t) -> Int32
+@_silgen_name("truncate") private func libcTruncate(_ path: UnsafePointer<CChar>?, _ length: off_t) -> Int32
+@_silgen_name("link") private func libcLink(_ src: UnsafePointer<CChar>?, _ dst: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("chmod") private func libcChmod(_ path: UnsafePointer<CChar>?, _ mode: mode_t) -> Int32
+@_silgen_name("chown") private func libcChown(_ path: UnsafePointer<CChar>?, _ owner: uid_t, _ group: gid_t) -> Int32
+@_silgen_name("lchown") private func libcLchown(_ path: UnsafePointer<CChar>?, _ owner: uid_t, _ group: gid_t) -> Int32
+@_silgen_name("lchmod") private func libcLchmod(_ path: UnsafePointer<CChar>?, _ mode: mode_t) -> Int32
+@_silgen_name("close") private func libcClose(_ fd: Int32) -> Int32
+@_silgen_name("rename") private func libcRename(_ from: UnsafePointer<CChar>?, _ to: UnsafePointer<CChar>?) -> Int32
+
+// FNM_CASEFOLD and FNM_LEADING_DIR are GNU extensions; the SwiftGlibc module
+// only re-exports them when _GNU_SOURCE is set. Hardcode the well-known values
+// — they happen to match what BSD and glibc both use.
+#if !canImport(Darwin)
+private let FNM_CASEFOLD: Int32 = 1 << 4
+private let FNM_LEADING_DIR: Int32 = 1 << 3
+#endif
+
+// `open(2)` is varargs in C; binding via @_silgen_name puts the mode arg in
+// the wrong calling-convention slot on some ABIs (mode arrives as zero on
+// arm64 macOS). Defer to the Swift module's imported `open` which handles
+// the C varargs ABI correctly. The wrapper is named distinctly because the
+// unqualified call would otherwise resolve to `File.open(url:...)`.
+@inline(__always) private func libcOpen(_ path: UnsafePointer<CChar>, _ flags: Int32, _ mode: mode_t) -> Int32 {
+    #if canImport(Darwin)
+    Darwin.open(path, flags, mode)
+    #else
+    Glibc.open(path, flags, mode)
+    #endif
+}
+
+// macOS exposes timespec fields on `stat` as `st_atimespec` (BSD legacy); Linux
+// uses the POSIX 2008 names `st_atim` etc. Provide a portable shim. birthtime
+// is a Darwin-only field — Linux only exposes it via `statx(2)`.
+extension stat {
+    var atimeSpec: timespec {
+        #if canImport(Darwin)
+        st_atimespec
+        #else
+        st_atim
+        #endif
+    }
+    var mtimeSpec: timespec {
+        #if canImport(Darwin)
+        st_mtimespec
+        #else
+        st_mtim
+        #endif
+    }
+    var ctimeSpec: timespec {
+        #if canImport(Darwin)
+        st_ctimespec
+        #else
+        st_ctim
+        #endif
+    }
+    var birthtimeSpec: timespec? {
+        #if canImport(Darwin)
+        st_birthtimespec
+        #else
+        nil
+        #endif
+    }
+}
 
 // MARK: - File Class
 
@@ -39,7 +115,7 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
         self.url = url
         self.mode = mode
         let flags = Self.openFlags(for: mode)
-        let openedFD = url.path.withCString { Darwin.open($0, flags, mode_t(permissions)) }
+        let openedFD = url.path.withCString { libcOpen($0, flags, mode_t(permissions)) }
         guard openedFD >= 0 else {
             let errorCode: CocoaError.Code = mode == .read ? .fileReadUnknown : .fileWriteUnknown
             throw CocoaError(errorCode, userInfo: [NSFilePathErrorKey: url.path])
@@ -48,7 +124,7 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
     }
 
     deinit {
-        if fd >= 0 { _ = Darwin.close(fd) }
+        if fd >= 0 { _ = libcClose(fd) }
     }
 
     private static func openFlags(for mode: Mode) -> Int32 {
@@ -79,19 +155,21 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
     // MARK: - Instance Properties
 
     public var atime: Date {
-        Date(timeIntervalSince1970: TimeInterval(rawStat().st_atimespec.tv_sec))
+        Date(timeIntervalSince1970: TimeInterval(rawStat().atimeSpec.tv_sec))
     }
 
     public var mtime: Date {
-        Date(timeIntervalSince1970: TimeInterval(rawStat().st_mtimespec.tv_sec))
+        Date(timeIntervalSince1970: TimeInterval(rawStat().mtimeSpec.tv_sec))
     }
 
     public var ctime: Date {
-        Date(timeIntervalSince1970: TimeInterval(rawStat().st_ctimespec.tv_sec))
+        Date(timeIntervalSince1970: TimeInterval(rawStat().ctimeSpec.tv_sec))
     }
 
-    public var birthtime: Date {
-        Date(timeIntervalSince1970: TimeInterval(rawStat().st_birthtimespec.tv_sec))
+    // Linux only exposes file creation time via statx(2), which isn't wrapped
+    // by the Glibc module — return nil on platforms where it isn't available.
+    public var birthtime: Date? {
+        rawStat().birthtimeSpec.map { Date(timeIntervalSince1970: TimeInterval($0.tv_sec)) }
     }
 
     public var size: Int {
@@ -142,7 +220,7 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
         case .unlock: op = LOCK_UN
         }
         if nonBlocking { op |= LOCK_NB }
-        guard bsdFlock(fd, op) == 0 else {
+        guard sysFlock(fd, op) == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
     }
@@ -168,7 +246,7 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
         guard fd >= 0 else { return }
         let fdToClose = fd
         fd = -1
-        guard Darwin.close(fdToClose) == 0 else {
+        guard libcClose(fdToClose) == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
     }
@@ -566,7 +644,7 @@ public extension File {
 
 public extension File {
     static func chmod(_ url: URL, permissions: Int) throws {
-        let result = url.path.withCString { Darwin.chmod($0, mode_t(permissions)) }
+        let result = url.path.withCString { libcChmod($0, mode_t(permissions)) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -590,7 +668,7 @@ public extension File {
         let newOwner = owner.map { uid_t($0) } ?? currentOwner
         let newGroup = group.map { gid_t($0) } ?? currentGroup
         
-        let result = url.path.withCString { Darwin.chown($0, newOwner, newGroup) }
+        let result = url.path.withCString { libcChown($0, newOwner, newGroup) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -615,7 +693,7 @@ public extension File {
         }
         // For symlinks, silently succeed (macOS behavior)
         #else
-        let result = url.path.withCString { lchmod($0, mode_t(permissions)) }
+        let result = url.path.withCString { libcLchmod($0, mode_t(permissions)) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -640,7 +718,7 @@ public extension File {
         let newOwner = owner.map { uid_t($0) } ?? currentOwner
         let newGroup = group.map { gid_t($0) } ?? currentGroup
         
-        let result = url.path.withCString { Darwin.lchown($0, newOwner, newGroup) }
+        let result = url.path.withCString { libcLchown($0, newOwner, newGroup) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -650,7 +728,7 @@ public extension File {
         // Create hard link
         let result = source.path.withCString { sourcePath in
             destination.path.withCString { destPath in
-                Darwin.link(sourcePath, destPath)
+                libcLink(sourcePath, destPath)
             }
         }
         guard result == 0 else {
@@ -679,15 +757,25 @@ public extension File {
     }
 
     static func rename(source: URL, destination: URL) throws {
-        // Use replaceItem - it works whether destination exists or not
-        // and provides atomic replacement when it does exist
-        _ = try FileManager.default.replaceItem(
-            at: destination, withItemAt: source, backupItemName: nil, resultingItemURL: nil,
-        )
+        // POSIX rename(2) is atomic on the same filesystem and works whether
+        // the destination exists or not (it's silently overwritten). Using
+        // it directly sidesteps FileManager.replaceItem, whose signature and
+        // semantics differ between macOS Foundation and corelibs-foundation.
+        let result = source.path.withCString { src in
+            destination.path.withCString { dst in
+                libcRename(src, dst)
+            }
+        }
+        guard result == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [
+                NSFilePathErrorKey: destination.path,
+                NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(errno)),
+            ])
+        }
     }
 
     static func truncate(_ url: URL, to size: Int) throws {
-        let result = url.path.withCString { Darwin.truncate($0, off_t(size)) }
+        let result = url.path.withCString { libcTruncate($0, off_t(size)) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -710,15 +798,15 @@ public extension File {
         
         // Access time
         times[0].tv_sec = Int(atime.timeIntervalSince1970)
-        times[0].tv_usec = Int32((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        times[0].tv_usec = .init((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
         
         // Modification time
         times[1].tv_sec = Int(mtime.timeIntervalSince1970)
-        times[1].tv_usec = Int32((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        times[1].tv_usec = .init((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
         
         let result = url.path.withCString { path in
             times.withUnsafeBufferPointer { timesPtr in
-                Darwin.utimes(path, timesPtr.baseAddress)
+                utimes(path, timesPtr.baseAddress)
             }
         }
         
@@ -733,15 +821,15 @@ public extension File {
         
         // Access time
         times[0].tv_sec = Int(atime.timeIntervalSince1970)
-        times[0].tv_usec = Int32((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        times[0].tv_usec = .init((atime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
         
         // Modification time
         times[1].tv_sec = Int(mtime.timeIntervalSince1970)
-        times[1].tv_usec = Int32((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+        times[1].tv_usec = .init((mtime.timeIntervalSince1970.truncatingRemainder(dividingBy: 1)) * 1_000_000)
         
         let result = url.path.withCString { path in
             times.withUnsafeBufferPointer { timesPtr in
-                Darwin.lutimes(path, timesPtr.baseAddress)
+                lutimes(path, timesPtr.baseAddress)
             }
         }
         
@@ -751,7 +839,7 @@ public extension File {
     }
 
     static func mkfifo(_ url: URL, permissions: Int = 0o666) throws {
-        let result = url.path.withCString { Darwin.mkfifo($0, mode_t(permissions)) }
+        let result = url.path.withCString { libcMkfifo($0, mode_t(permissions)) }
         guard result == 0 else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
         }
@@ -776,15 +864,14 @@ public extension File {
     }
 
     static func umask() -> Int {
-        // Get current umask by setting and restoring
-        let current = Darwin.umask(0)
-        Darwin.umask(current)
+        // Read the current value by setting it to 0 then restoring it.
+        let current = libcUmask(0)
+        _ = libcUmask(current)
         return Int(current)
     }
 
     static func umask(_ mask: Int) -> Int {
-        let oldMask = Darwin.umask(mode_t(mask))
-        return Int(oldMask)
+        Int(libcUmask(mode_t(mask)))
     }
 }
 
@@ -794,7 +881,7 @@ public extension File {
     static func fnmatch(pattern: String, path: String, flags: FnmatchFlags = []) -> Bool {
         pattern.withCString { patternPtr in
             path.withCString { pathPtr in
-                Darwin.fnmatch(patternPtr, pathPtr, flags.rawValue) == 0
+                libcFnmatch(patternPtr, pathPtr, flags.rawValue) == 0
             }
         }
     }
@@ -850,10 +937,10 @@ public struct FileStat {
             size: Int64(buf.st_size),
             blksize: Int(buf.st_blksize),
             blocks: Int64(buf.st_blocks),
-            atime: Date(timeIntervalSince1970: TimeInterval(buf.st_atimespec.tv_sec)),
-            mtime: Date(timeIntervalSince1970: TimeInterval(buf.st_mtimespec.tv_sec)),
-            ctime: Date(timeIntervalSince1970: TimeInterval(buf.st_ctimespec.tv_sec)),
-            birthtime: Date(timeIntervalSince1970: TimeInterval(buf.st_birthtimespec.tv_sec)),
+            atime: Date(timeIntervalSince1970: TimeInterval(buf.atimeSpec.tv_sec)),
+            mtime: Date(timeIntervalSince1970: TimeInterval(buf.mtimeSpec.tv_sec)),
+            ctime: Date(timeIntervalSince1970: TimeInterval(buf.ctimeSpec.tv_sec)),
+            birthtime: buf.birthtimeSpec.map { Date(timeIntervalSince1970: TimeInterval($0.tv_sec)) },
         )
     }
 }

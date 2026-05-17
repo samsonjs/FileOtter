@@ -40,27 +40,27 @@ public struct Dir: Equatable, Hashable, RandomAccessCollection, CustomStringConv
 
 public extension Dir {
     static var caches: URL {
-        URL.cachesDirectory
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? home
     }
 
     static var documents: URL {
-        URL.documentsDirectory
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? home
     }
 
     static var home: URL {
-        URL.homeDirectory
+        FileManager.default.homeDirectoryForCurrentUser
     }
 
     static var library: URL {
-        URL.libraryDirectory
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first ?? home
     }
 
     static var pwd: URL {
-        URL.currentDirectory()
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     }
 
     static var tmp: URL {
-        URL.temporaryDirectory
+        URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     }
 }
 

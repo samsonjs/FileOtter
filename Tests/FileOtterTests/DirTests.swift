@@ -28,32 +28,42 @@ final class DirTests: XCTestCase {
     func testCachesDirectory() {
         let caches = Dir.caches
         XCTAssertTrue(FileManager.default.fileExists(atPath: caches.path))
+        // Path-substring conventions are Apple-specific.
+        #if canImport(Darwin)
         XCTAssertTrue(caches.path.contains("Caches"))
+        #endif
     }
 
     func testPwd() {
         let pwd = Dir.pwd
-
-        XCTAssertEqual(pwd, URL.currentDirectory())
+        XCTAssertEqual(pwd.path, FileManager.default.currentDirectoryPath)
         XCTAssertTrue(FileManager.default.fileExists(atPath: pwd.path))
     }
 
     func testDocumentsDirectory() {
         let documents = Dir.documents
+        // On Apple platforms ~/Documents is always present; Linux just returns
+        // a conventional path that may not have been created yet.
+        #if canImport(Darwin)
         XCTAssertTrue(FileManager.default.fileExists(atPath: documents.path))
         XCTAssertTrue(documents.path.contains("Documents"))
+        #else
+        XCTAssertFalse(documents.path.isEmpty)
+        #endif
     }
 
     func testHomeDirectory() {
         let home = Dir.home
         XCTAssertTrue(FileManager.default.fileExists(atPath: home.path))
-        XCTAssertEqual(home.path, URL.homeDirectory.path)
+        XCTAssertEqual(home.path, FileManager.default.homeDirectoryForCurrentUser.path)
     }
 
     func testLibraryDirectory() {
         let library = Dir.library
         XCTAssertTrue(FileManager.default.fileExists(atPath: library.path))
+        #if canImport(Darwin)
         XCTAssertTrue(library.path.contains("Library"))
+        #endif
     }
 
     // MARK: - chdir Tests

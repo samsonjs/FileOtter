@@ -106,16 +106,18 @@ final class FileInfoTests: XCTestCase {
     func testStat() throws {
         let stat = try File.fileStatus(testFile)
 
-        // Verify basic properties
-        XCTAssertGreaterThan(stat.ino, 0) // inode should be positive
-        XCTAssertGreaterThan(stat.uid, 0) // uid should be positive
-        XCTAssertGreaterThan(stat.gid, 0) // gid should be positive
-        XCTAssertEqual(stat.size, 12) // "Test content" is 12 bytes
+        XCTAssertGreaterThan(stat.ino, 0)
+        // uid/gid are 0 when the test runs as root (e.g., in a Docker container).
+        XCTAssertGreaterThanOrEqual(stat.uid, 0)
+        XCTAssertGreaterThanOrEqual(stat.gid, 0)
+        XCTAssertEqual(stat.size, 12)
 
-        // Verify times are reasonable
         XCTAssertLessThan(Date().timeIntervalSince(stat.mtime), 3600)
         XCTAssertLessThan(Date().timeIntervalSince(stat.atime), 3600)
+        // birthtime is only exposed in Darwin's stat; Linux requires statx(2).
+        #if canImport(Darwin)
         XCTAssertNotNil(stat.birthtime)
+        #endif
     }
 
     func testStatThrowsForNonExistent() throws {
@@ -182,9 +184,15 @@ final class FileInfoTests: XCTestCase {
     func testInstanceBirthtime() throws {
         let file = try File(url: testFile, mode: .read)
         defer { try? file.close() }
-        let viaInstance = file.birthtime
+        // birthtime is Date? — Darwin returns a value; Linux returns nil
+        // because the kernel only exposes creation time via statx(2).
+        #if canImport(Darwin)
+        let viaInstance = try XCTUnwrap(file.birthtime)
         let viaStatic = try File.birthtime(testFile)
         XCTAssertEqual(viaInstance.timeIntervalSince1970, viaStatic.timeIntervalSince1970, accuracy: 1.0)
+        #else
+        XCTAssertNil(file.birthtime)
+        #endif
     }
 
     func testInstanceSize() throws {
