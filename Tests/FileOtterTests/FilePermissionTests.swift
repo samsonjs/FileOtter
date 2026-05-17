@@ -8,14 +8,6 @@
 @testable import FileOtter
 import XCTest
 
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
-
-private var runningAsRoot: Bool { getuid() == 0 }
-
 final class FilePermissionTests: XCTestCase {
     var tempDir: URL!
     var testFile: URL!
@@ -61,8 +53,7 @@ final class FilePermissionTests: XCTestCase {
         // Files we created should be writable
         XCTAssertTrue(File.isWritable(testFile))
 
-        // System files are generally not writable — but root bypasses checks.
-        try XCTSkipIf(runningAsRoot, "root can write to anything")
+        // System files are generally not writable
         XCTAssertFalse(File.isWritable(URL(fileURLWithPath: "/etc/hosts")))
 
         // Non-existent files are not writable
@@ -205,11 +196,7 @@ final class FilePermissionTests: XCTestCase {
         XCTAssertEqual(perms, 0o444)
 
         XCTAssertTrue(File.isReadable(testFile))
-        // Root bypasses POSIX permission checks, so isWritable returns true
-        // even with 0o444 — assert only when running unprivileged.
-        if !runningAsRoot {
-            XCTAssertFalse(File.isWritable(testFile))
-        }
+        XCTAssertFalse(File.isWritable(testFile))
 
         // Change back to read-write
         try File.chmod(testFile, permissions: 0o644)

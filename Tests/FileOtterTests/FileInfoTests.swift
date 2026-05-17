@@ -107,9 +107,8 @@ final class FileInfoTests: XCTestCase {
         let stat = try File.fileStatus(testFile)
 
         XCTAssertGreaterThan(stat.ino, 0)
-        // uid/gid are 0 when the test runs as root (e.g., in a Docker container).
-        XCTAssertGreaterThanOrEqual(stat.uid, 0)
-        XCTAssertGreaterThanOrEqual(stat.gid, 0)
+        XCTAssertGreaterThan(stat.uid, 0)
+        XCTAssertGreaterThan(stat.gid, 0)
         XCTAssertEqual(stat.size, 12)
 
         XCTAssertLessThan(Date().timeIntervalSince(stat.mtime), 3600)
