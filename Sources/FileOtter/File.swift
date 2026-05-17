@@ -8,18 +8,22 @@
 import Darwin
 import Foundation
 
+// `Darwin.flock` is ambiguous — it names both `struct flock` (record locking) and the
+// BSD `flock(2)` function. Bind the function under a unique Swift name.
+@_silgen_name("flock") private func bsdFlock(_ fd: Int32, _ operation: Int32) -> Int32
+
 // MARK: - File Class
 
 /// A File object represents an open file with automatic resource management.
 /// The file handle is automatically closed when the File object is deallocated.
 public class File: CustomStringConvertible, CustomDebugStringConvertible {
-    private let handle: FileHandle
+    private var fd: Int32
     public let url: URL
     public let mode: Mode
 
     // MARK: - Mode
 
-    public enum Mode {
+    public enum Mode: Equatable {
         case read // r
         case write // w
         case append // a
@@ -31,26 +35,45 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
 
     // MARK: - Initialization
 
-    public init(url: URL, mode: Mode = .read, permissions _: Int = 0o666) throws {
+    public init(url: URL, mode: Mode = .read, permissions: Int = 0o666) throws {
         self.url = url
         self.mode = mode
-        handle = FileHandle() // TODO: Implement proper opening
-        fatalError("Not implemented")
+        let flags = Self.openFlags(for: mode)
+        let openedFD = url.path.withCString { Darwin.open($0, flags, mode_t(permissions)) }
+        guard openedFD >= 0 else {
+            let errorCode: CocoaError.Code = mode == .read ? .fileReadUnknown : .fileWriteUnknown
+            throw CocoaError(errorCode, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        fd = openedFD
     }
 
     deinit {
-        try? handle.close()
+        if fd >= 0 { _ = Darwin.close(fd) }
+    }
+
+    private static func openFlags(for mode: Mode) -> Int32 {
+        switch mode {
+        case .read: O_RDONLY
+        case .write: O_WRONLY | O_CREAT | O_TRUNC
+        case .append: O_WRONLY | O_CREAT | O_APPEND
+        case .readWrite: O_RDWR
+        case .readWriteNew: O_RDWR | O_CREAT | O_TRUNC
+        case .readAppend: O_RDWR | O_CREAT | O_APPEND
+        case .writeExclusive: O_WRONLY | O_CREAT | O_EXCL
+        }
     }
 
     // MARK: - Opening with blocks
 
-    public static func open(url _: URL, mode _: Mode = .read, permissions _: Int = 0o666) throws -> File {
-        fatalError("Not implemented")
+    public static func open(url: URL, mode: Mode = .read, permissions: Int = 0o666) throws -> File {
+        try File(url: url, mode: mode, permissions: permissions)
     }
 
     @discardableResult
-    public static func open<T>(url _: URL, mode _: Mode = .read, permissions _: Int = 0o666, _: (File) throws -> T) rethrows -> T {
-        fatalError("Not implemented")
+    public static func open<T>(url: URL, mode: Mode = .read, permissions: Int = 0o666, _ body: (File) throws -> T) throws -> T {
+        let file = try File(url: url, mode: mode, permissions: permissions)
+        defer { try? file.close() }
+        return try body(file)
     }
 
     // MARK: - Instance Properties
@@ -89,8 +112,17 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
         fatalError("Not implemented")
     }
 
-    public func flock(_: LockOperation) throws {
-        fatalError("Not implemented")
+    public func flock(_ operation: LockOperation, nonBlocking: Bool = false) throws {
+        var op: Int32
+        switch operation {
+        case .shared: op = LOCK_SH
+        case .exclusive: op = LOCK_EX
+        case .unlock: op = LOCK_UN
+        }
+        if nonBlocking { op |= LOCK_NB }
+        guard bsdFlock(fd, op) == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
     public func fileStat() throws -> FileStat {
@@ -102,7 +134,12 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
     }
 
     public func close() throws {
-        fatalError("Not implemented")
+        guard fd >= 0 else { return }
+        let fdToClose = fd
+        fd = -1
+        guard Darwin.close(fdToClose) == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
     // MARK: - CustomStringConvertible
@@ -805,7 +842,6 @@ public enum LockOperation {
     case shared // LOCK_SH
     case exclusive // LOCK_EX
     case unlock // LOCK_UN
-    case nonBlocking // LOCK_NB (can be OR'd with others)
 }
 
 // MARK: - File Type enum
