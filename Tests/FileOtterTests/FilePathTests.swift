@@ -29,137 +29,265 @@ final class FilePathTests: XCTestCase {
     // MARK: - basename Tests
 
     func testBasename() throws {
-        let url1 = URL(fileURLWithPath: "/Users/sjs/file.txt")
-        XCTAssertEqual(File.basename(url1), "file.txt")
+        XCTAssertEqual(File.basename("/Users/sjs/file.txt"), "file.txt")
+        XCTAssertEqual(File.basename("/Users/sjs/dir/"), "dir")
+        XCTAssertEqual(File.basename("/"), "/")
+        XCTAssertEqual(File.basename("file.rb"), "file.rb")
+    }
 
-        let url2 = URL(fileURLWithPath: "/Users/sjs/dir/")
-        XCTAssertEqual(File.basename(url2), "dir")
-
-        let url3 = URL(fileURLWithPath: "/")
-        XCTAssertEqual(File.basename(url3), "/")
-
-        let url4 = URL(fileURLWithPath: "file.rb")
-        XCTAssertEqual(File.basename(url4), "file.rb")
+    func testBasenameEdgeCases() throws {
+        // Empty path
+        XCTAssertEqual(File.basename(""), "")
+        // Trailing slashes are stripped (Ruby parity)
+        XCTAssertEqual(File.basename("foo.txt/"), "foo.txt")
+        XCTAssertEqual(File.basename("/foo/bar/"), "bar")
+        XCTAssertEqual(File.basename("/foo/bar///"), "bar")
+        XCTAssertEqual(File.basename("dir///base"), "base")
+        XCTAssertEqual(File.basename("dir///base/"), "base")
+        // Single component
+        XCTAssertEqual(File.basename("foo"), "foo")
+        // Dot paths are returned as-is
+        XCTAssertEqual(File.basename("."), ".")
+        XCTAssertEqual(File.basename(".."), "..")
+        // Just slashes collapse to root
+        XCTAssertEqual(File.basename("///"), "/")
+        XCTAssertEqual(File.basename("//"), "/")
+        // Short rooted paths
+        XCTAssertEqual(File.basename("/a"), "a")
+        XCTAssertEqual(File.basename("/a/b"), "b")
+        XCTAssertEqual(File.basename("/tmp"), "tmp")
+        XCTAssertEqual(File.basename("/tmp/"), "tmp")
+        // Unicode
+        XCTAssertEqual(File.basename("/path/Офис.m4a"), "Офис.m4a")
     }
 
     func testBasenameWithSuffix() throws {
-        let url = URL(fileURLWithPath: "/Users/sjs/file.txt")
-        XCTAssertEqual(File.basename(url, suffix: ".txt"), "file")
-        XCTAssertEqual(File.basename(url, suffix: ".rb"), "file.txt")
-
-        let url2 = URL(fileURLWithPath: "/Users/sjs/archive.tar.gz")
-        XCTAssertEqual(File.basename(url2, suffix: ".gz"), "archive.tar")
-        XCTAssertEqual(File.basename(url2, suffix: ".tar.gz"), "archive")
+        XCTAssertEqual(File.basename("/Users/sjs/file.txt", suffix: ".txt"), "file")
+        XCTAssertEqual(File.basename("/Users/sjs/file.txt", suffix: ".rb"), "file.txt")
+        XCTAssertEqual(File.basename("/Users/sjs/archive.tar.gz", suffix: ".gz"), "archive.tar")
+        XCTAssertEqual(File.basename("/Users/sjs/archive.tar.gz", suffix: ".tar.gz"), "archive")
+        // Ruby: stripping suffix can leave an empty string
+        XCTAssertEqual(File.basename(".rb", suffix: ".rb"), "")
+        // Suffix that doesn't match returns base unchanged
+        XCTAssertEqual(File.basename("foo", suffix: ".ext"), "foo")
+        XCTAssertEqual(File.basename("s", suffix: "_a"), "s")
+        // Suffix can be any trailing substring, not just a dotted extension
+        XCTAssertEqual(File.basename("baz.rb", suffix: "z.rb"), "ba")
+        // Trailing slash stripped before suffix match
+        XCTAssertEqual(File.basename("foo.rb/", suffix: ".rb"), "foo")
     }
 
     func testBasenameWithWildcardSuffix() throws {
-        let url = URL(fileURLWithPath: "/Users/sjs/file.txt")
-        XCTAssertEqual(File.basename(url, suffix: ".*"), "file")
-
-        let url2 = URL(fileURLWithPath: "/Users/sjs/archive.tar.gz")
-        XCTAssertEqual(File.basename(url2, suffix: ".*"), "archive.tar")
-
-        let url3 = URL(fileURLWithPath: "/Users/sjs/noext")
-        XCTAssertEqual(File.basename(url3, suffix: ".*"), "noext")
+        XCTAssertEqual(File.basename("/Users/sjs/file.txt", suffix: ".*"), "file")
+        XCTAssertEqual(File.basename("/Users/sjs/archive.tar.gz", suffix: ".*"), "archive.tar")
+        XCTAssertEqual(File.basename("/Users/sjs/noext", suffix: ".*"), "noext")
+        // Dotfiles have no extension to strip
+        XCTAssertEqual(File.basename(".profile", suffix: ".*"), ".profile")
+        XCTAssertEqual(File.basename("/Users/sjs/.bashrc", suffix: ".*"), ".bashrc")
     }
 
     // MARK: - dirname Tests
 
     func testDirname() throws {
-        let url1 = URL(fileURLWithPath: "/Users/sjs/file.txt")
-        XCTAssertEqual(File.dirname(url1).path(), "/Users/sjs/")
+        XCTAssertEqual(File.dirname("/Users/sjs/file.txt"), "/Users/sjs")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/"), "/Users/sjs")
+        XCTAssertEqual(File.dirname("/file.txt"), "/")
+        XCTAssertEqual(File.dirname("file.txt"), ".")
+    }
 
-        let url2 = URL(fileURLWithPath: "/Users/sjs/dir/")
-        XCTAssertEqual(File.dirname(url2).path(), "/Users/sjs/")
+    func testDirnameEdgeCases() throws {
+        XCTAssertEqual(File.dirname(""), ".")
+        XCTAssertEqual(File.dirname("/"), "/")
+        XCTAssertEqual(File.dirname("."), ".")
+        XCTAssertEqual(File.dirname("./"), ".")
+        XCTAssertEqual(File.dirname(".."), ".")
+        XCTAssertEqual(File.dirname("../"), ".")
+        XCTAssertEqual(File.dirname("foo"), ".")
+        // Trailing slash on a single component
+        XCTAssertEqual(File.dirname("foo/"), ".")
+        // Interior slash runs are preserved (Ruby parity)
+        XCTAssertEqual(File.dirname("a/b//c"), "a/b")
+        XCTAssertEqual(File.dirname("a//b"), "a")
+        XCTAssertEqual(File.dirname("/holy///schnikies//w00t.bin"), "/holy///schnikies")
+        // Dot components are not normalized
+        XCTAssertEqual(File.dirname("/foo/."), "/foo")
+        XCTAssertEqual(File.dirname("/foo/./"), "/foo")
+        XCTAssertEqual(File.dirname("/foo/../."), "/foo/..")
+        XCTAssertEqual(File.dirname("foo/../"), "foo")
+        XCTAssertEqual(File.dirname("/."), "/")
+        // Trailing slash above root
+        XCTAssertEqual(File.dirname("/foo/"), "/")
+    }
 
-        let url3 = URL(fileURLWithPath: "/file.txt")
-        XCTAssertEqual(File.dirname(url3).path(), "/")
-
-        let url4 = URL(fileURLWithPath: "file.txt")
-        XCTAssertEqual(File.dirname(url4).path(), "./")
+    func testDirnameLeadingSlashes() throws {
+        // Ruby collapses 2+ leading slashes in the dirname result down to 1.
+        XCTAssertEqual(File.dirname("/////foo/bar/"), "/foo")
+        XCTAssertEqual(File.dirname("/////"), "/")
+        XCTAssertEqual(File.dirname("//foo//"), "/")
     }
 
     func testDirnameWithLevel() throws {
-        let url = URL(fileURLWithPath: "/Users/sjs/dir/file.txt")
-        XCTAssertEqual(File.dirname(url, level: 1).path(), "/Users/sjs/dir/")
-        XCTAssertEqual(File.dirname(url, level: 2).path(), "/Users/sjs/")
-        XCTAssertEqual(File.dirname(url, level: 3).path(), "/Users/")
-        XCTAssertEqual(File.dirname(url, level: 4).path(), "/")
-        XCTAssertEqual(File.dirname(url, level: 5).path(), "/") // Can't go beyond root
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 1), "/Users/sjs/dir")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 2), "/Users/sjs")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 3), "/Users")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 4), "/")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 5), "/") // Can't go beyond root
+        // Relative path overshoot
+        XCTAssertEqual(File.dirname("a/b", level: 10), ".")
+        XCTAssertEqual(File.dirname("/Users/sjs/dir/file.txt", level: 100), "/")
+        // level: 0 is identity
+        XCTAssertEqual(File.dirname("poot.txt", level: 0), "poot.txt")
+        XCTAssertEqual(File.dirname("/", level: 0), "/")
     }
 
     // MARK: - extname Tests
 
     func testExtname() throws {
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "test.rb")), ".rb")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "a/b/d/test.rb")), ".rb")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: ".a/b/d/test.rb")), ".rb")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "test")), "")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "test.tar.gz")), ".gz")
+        XCTAssertEqual(File.extname("test.rb"), ".rb")
+        XCTAssertEqual(File.extname("a/b/d/test.rb"), ".rb")
+        XCTAssertEqual(File.extname(".a/b/d/test.rb"), ".rb")
+        XCTAssertEqual(File.extname("test"), "")
+        XCTAssertEqual(File.extname("test.tar.gz"), ".gz")
     }
 
     func testExtnameWithDotfile() throws {
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: ".profile")), "")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: ".profile.sh")), ".sh")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "/Users/sjs/.bashrc")), "")
-        XCTAssertEqual(File.extname(URL(fileURLWithPath: "/Users/sjs/.config.bak")), ".bak")
+        XCTAssertEqual(File.extname(".profile"), "")
+        XCTAssertEqual(File.extname(".profile.sh"), ".sh")
+        XCTAssertEqual(File.extname("/Users/sjs/.bashrc"), "")
+        XCTAssertEqual(File.extname("/Users/sjs/.config.bak"), ".bak")
+    }
+
+    func testExtnameEdgeCases() throws {
+        XCTAssertEqual(File.extname(""), "")
+        // All-dots basenames have no extension
+        XCTAssertEqual(File.extname("."), "")
+        XCTAssertEqual(File.extname(".."), "")
+        XCTAssertEqual(File.extname("..."), "")
+        XCTAssertEqual(File.extname("...."), "")
+        // Ruby keeps a trailing-dot extension as "." on POSIX
+        XCTAssertEqual(File.extname("foo."), ".")
+        XCTAssertEqual(File.extname("foo.bar."), ".")
+        XCTAssertEqual(File.extname(".foo."), ".")
+        // Leading double-dot file: ".rb" is the extension
+        XCTAssertEqual(File.extname("..rb"), ".rb")
+        // Dot only in a directory component, not the basename
+        XCTAssertEqual(File.extname("/foo.bar/baz"), "")
+        XCTAssertEqual(File.extname("/foo/bar.baz/qux"), "")
+        XCTAssertEqual(File.extname("/foo.rb/bar.c"), ".c")
+        // Interior slash runs
+        XCTAssertEqual(File.extname("/tmp//bla.rb"), ".rb")
+        // Multiple dots — last one wins
+        XCTAssertEqual(File.extname("a.b.c.d.e"), ".e")
+        XCTAssertEqual(File.extname(".app.conf"), ".conf")
+        // Roots
+        XCTAssertEqual(File.extname("/"), "")
+        XCTAssertEqual(File.extname("/."), "")
+        // Unicode
+        XCTAssertEqual(File.extname("Имя.m4a"), ".m4a")
     }
 
     // MARK: - split Tests
 
     func testSplit() throws {
-        let (dir1, name1) = File.split(URL(fileURLWithPath: "/Users/sjs/file.txt"))
-        XCTAssertEqual(dir1.path, "/Users/sjs")
+        let (dir1, name1) = File.split("/Users/sjs/file.txt")
+        XCTAssertEqual(dir1, "/Users/sjs")
         XCTAssertEqual(name1, "file.txt")
 
-        let (dir2, name2) = File.split(URL(fileURLWithPath: "/file.txt"))
-        XCTAssertEqual(dir2.path, "/")
+        let (dir2, name2) = File.split("/file.txt")
+        XCTAssertEqual(dir2, "/")
         XCTAssertEqual(name2, "file.txt")
 
-        let (dir3, name3) = File.split(URL(fileURLWithPath: "file.txt"))
-        XCTAssertEqual(dir3.path(), "./")
+        let (dir3, name3) = File.split("file.txt")
+        XCTAssertEqual(dir3, ".")
         XCTAssertEqual(name3, "file.txt")
 
-        let (dir4, name4) = File.split(URL(fileURLWithPath: "/Users/sjs/"))
-        XCTAssertEqual(dir4.path, "/Users")
+        let (dir4, name4) = File.split("/Users/sjs/")
+        XCTAssertEqual(dir4, "/Users")
         XCTAssertEqual(name4, "sjs")
 
-        // Root path edge case
-        let (dir5, name5) = File.split(URL(fileURLWithPath: "/"))
-        XCTAssertEqual(dir5.path, "/")
-        XCTAssertEqual(name5, "")
+        // Ruby: split == (dirname, basename), so split("/") == ("/", "/")
+        let (dir5, name5) = File.split("/")
+        XCTAssertEqual(dir5, "/")
+        XCTAssertEqual(name5, "/")
+    }
+
+    func testSplitEdgeCases() throws {
+        // Empty path: dirname == ".", basename == ""
+        let (dir1, name1) = File.split("")
+        XCTAssertEqual(dir1, ".")
+        XCTAssertEqual(name1, "")
+
+        // Leading slashes collapse in dirname, trailing slashes strip in basename
+        let (dir2, name2) = File.split("//foo////")
+        XCTAssertEqual(dir2, "/")
+        XCTAssertEqual(name2, "foo")
+
+        // Path with extension
+        let (dir3, name3) = File.split("/foo/bar/baz.rb")
+        XCTAssertEqual(dir3, "/foo/bar")
+        XCTAssertEqual(name3, "baz.rb")
     }
 
     // MARK: - join Tests
 
     func testJoin() throws {
-        let u = URL(fileURLWithPath: "hello")
-        XCTAssertEqual(File.join(u.path(), "world").path(), "hello/world")
-
-        XCTAssertEqual(File.join("usr", "mail", "gumby").path(), "usr/mail/gumby")
-        XCTAssertEqual(File.join("/usr", "mail", "gumby").path(), "/usr/mail/gumby")
-        XCTAssertEqual(File.join("/", "usr", "bin").path(), "/usr/bin/")
+        XCTAssertEqual(File.join("hello", "world"), "hello/world")
+        XCTAssertEqual(File.join("usr", "mail", "gumby"), "usr/mail/gumby")
+        XCTAssertEqual(File.join("/usr", "mail", "gumby"), "/usr/mail/gumby")
+        XCTAssertEqual(File.join("/", "usr", "bin"), "/usr/bin")
 
         // Single component
-        XCTAssertEqual(File.join("file.txt").path(), "file.txt")
-        XCTAssertEqual(File.join("/file.txt").path(), "/file.txt")
+        XCTAssertEqual(File.join("file.txt"), "file.txt")
+        XCTAssertEqual(File.join("/file.txt"), "/file.txt")
 
-        // Empty components are ignored
-        XCTAssertEqual(File.join("usr", "", "bin").path(), "usr/bin")
+        // Empty components in the middle collapse to a single separator
+        XCTAssertEqual(File.join("usr", "", "bin"), "usr/bin")
+        XCTAssertEqual(File.join("usr/", "", "bin"), "usr/bin")
+        XCTAssertEqual(File.join("usr", "", "/bin"), "usr/bin")
+        XCTAssertEqual(File.join("usr/", "", "/bin"), "usr/bin")
 
-        // Handles trailing slashes
-        XCTAssertEqual(File.join("/usr/", "local/", "bin").path(), "/usr/local/bin/")
+        // Adjacent boundary slashes dedup to one
+        XCTAssertEqual(File.join("/usr/", "/local/", "/bin"), "/usr/local/bin")
+        XCTAssertEqual(File.join("usr/", "/bin"), "usr/bin")
+
+        // Trailing slash on the last component IS preserved
+        XCTAssertEqual(File.join("/usr/", "local/", "bin/"), "/usr/local/bin/")
+        XCTAssertEqual(File.join("a", ""), "a/")
+        XCTAssertEqual(File.join("bin", "/"), "bin/")
+        XCTAssertEqual(File.join("bin/", "/"), "bin/")
+    }
+
+    func testJoinPreservesInteriorSlashes() throws {
+        // Ruby only dedups *at the boundary* between two components.
+        // Interior slash runs are part of a component and stay verbatim.
+        XCTAssertEqual(File.join("usr//", "bin"), "usr//bin")
+        XCTAssertEqual(File.join("usr", "//bin"), "usr//bin")
+        XCTAssertEqual(File.join("usr/", "//bin"), "usr//bin")
+        // Only the boundary slash drops: "usr//" + "/bin" → strip trailing from left → "usr" + "/bin"
+        XCTAssertEqual(File.join("usr//", "/bin"), "usr/bin")
+        // URL-like prefixes survive
+        XCTAssertEqual(File.join("file://usr", "bin"), "file://usr/bin")
+    }
+
+    func testJoinWithEmptyStrings() throws {
+        // An empty string contributes a separator at the boundary.
+        XCTAssertEqual(File.join("", ""), "/")
+        XCTAssertEqual(File.join("", "bin"), "/bin")
+        XCTAssertEqual(File.join("bin", ""), "bin/")
+        // Slashes at one side absorb the boundary cleanly.
+        XCTAssertEqual(File.join("/", "bin"), "/bin")
+        XCTAssertEqual(File.join("/", "/bin"), "/bin")
+        XCTAssertEqual(File.join(""), "")
     }
 
     func testJoinWithArray() throws {
-        let components = ["usr", "local", "bin"]
-        XCTAssertEqual(File.join(components).path(), "usr/local/bin")
-
-        let absoluteComponents = ["/usr", "local", "bin"]
-        XCTAssertEqual(File.join(absoluteComponents).path(), "/usr/local/bin/")
-
-        let singleComponent = ["file.txt"]
-        XCTAssertEqual(File.join(singleComponent).path(), "file.txt")
+        XCTAssertEqual(File.join(["usr", "local", "bin"]), "usr/local/bin")
+        XCTAssertEqual(File.join(["/usr", "local", "bin"]), "/usr/local/bin")
+        XCTAssertEqual(File.join(["file.txt"]), "file.txt")
+        XCTAssertEqual(File.join([]), "")
+        XCTAssertEqual(File.join([""]), "")
+        XCTAssertEqual(File.join(["", ""]), "/")
+        XCTAssertEqual(File.join(["a", "b", "c", "d"]), "a/b/c/d")
     }
 
     // MARK: - absolutePath Tests

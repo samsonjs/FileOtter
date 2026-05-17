@@ -119,84 +119,109 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
 // MARK: - Static Path Operations
 
 public extension File {
-    static func basename(_ url: URL, suffix: String? = nil) -> String {
-        // Handle root path special case
-        if url.path == "/" {
-            return "/"
+    static func basename(_ path: String, suffix: String? = nil) -> String {
+        if path.isEmpty { return "" }
+
+        // Strip trailing slashes; collapsing path of only slashes is root.
+        var p = Substring(path)
+        while p.count > 1, p.last == "/" { p = p.dropLast() }
+        if p == "/" { return "/" }
+
+        // Last path component
+        let base: String
+        if let lastSlash = p.lastIndex(of: "/") {
+            base = String(p[p.index(after: lastSlash)...])
+        } else {
+            base = String(p)
         }
 
-        // Get the last path component using URL's built-in method
-        let base = url.lastPathComponent
+        guard let suffix else { return base }
 
-        // If no suffix specified, return the base
-        guard let suffix else {
-            return base
-        }
-
-        // Handle wildcard suffix ".*"
         if suffix == ".*" {
-            // Use URL's pathExtension to remove any extension
-            let withoutExt = url.deletingPathExtension().lastPathComponent
-            return withoutExt
+            // Strip the final extension, but leading-dot files are not extensions.
+            guard let dot = base.lastIndex(of: "."), dot != base.startIndex else {
+                return base
+            }
+            return String(base[..<dot])
         }
 
-        // Handle regular suffix
         if base.hasSuffix(suffix) {
             return String(base.dropLast(suffix.count))
         }
-
         return base
     }
 
-    static func dirname(_ url: URL, level: Int = 1) -> URL {
-        var result = url
-        for _ in 0 ..< level where result.path != "/" {
-            result = result.deletingLastPathComponent()
+    static func dirname(_ path: String, level: Int = 1) -> String {
+        var current = path
+        for _ in 0 ..< level {
+            current = dirnameOnce(current)
+            if current == "/" || current == "." { break }
         }
+        return current
+    }
+
+    private static func dirnameOnce(_ path: String) -> String {
+        if path.isEmpty { return "." }
+
+        // Strip trailing slashes, except for root.
+        var p = Substring(path)
+        while p.count > 1, p.last == "/" { p = p.dropLast() }
+        if p == "/" { return "/" }
+
+        guard let lastSlash = p.lastIndex(of: "/") else {
+            // Single component, no parent directory.
+            return "."
+        }
+
+        // Everything before the last slash, with trailing slashes collapsed.
+        var dir = p[..<lastSlash]
+        while dir.count > 1, dir.last == "/" { dir = dir.dropLast() }
+        if dir.isEmpty { return "/" }
+        // Ruby collapses 2+ leading slashes in the dirname result down to one.
+        var result = String(dir)
+        while result.hasPrefix("//") { result.removeFirst() }
         return result
     }
 
-    static func extname(_ url: URL) -> String {
-        let ext = url.pathExtension
-        return ext.isEmpty ? "" : ".\(ext)"
+    static func extname(_ path: String) -> String {
+        let base = basename(path)
+        if base.isEmpty { return "" }
+        guard let dot = base.lastIndex(of: ".") else { return "" }
+        // Leading-dot files don't have an extension (".bashrc" → "").
+        if dot == base.startIndex { return "" }
+        // Basenames that are entirely dots ("..", "...") have no extension.
+        if base.allSatisfy({ $0 == "." }) { return "" }
+        return String(base[dot...])
     }
 
-    static func split(_ url: URL) -> (dir: URL, name: String) {
-        let dir = url.deletingLastPathComponent()
-        let name = url.lastPathComponent
-
-        // Handle root path special case
-        if url.path == "/" {
-            return (url, "")
-        }
-
-        return (dir, name)
+    static func split(_ path: String) -> (dir: String, name: String) {
+        (dirname(path), basename(path))
     }
 
-    static func join(_ components: String...) -> URL {
+    static func join(_ components: String...) -> String {
         join(components)
     }
 
-    static func join(_ components: [String]) -> URL {
-        // Filter out empty components
-        let nonEmptyComponents = components.filter { !$0.isEmpty }
-
-        guard !nonEmptyComponents.isEmpty else {
-            return URL(fileURLWithPath: ".")
-        }
-
-        // Start with the first component to preserve absolute/relative nature
-        var result = URL(fileURLWithPath: nonEmptyComponents[0])
-
-        // Append remaining components
-        for component in nonEmptyComponents.dropFirst() {
-            // Remove leading/trailing slashes from component before appending
-            let trimmed = component.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            if !trimmed.isEmpty {
-                result.appendPathComponent(trimmed)
+    static func join(_ components: [String]) -> String {
+        if components.isEmpty { return "" }
+        // Ruby's File.join dedups slashes only at the boundary between
+        // consecutive components — interior slash runs are preserved.
+        var result = components[0]
+        for arg in components.dropFirst() {
+            if arg.hasPrefix("/") {
+                // Strip all trailing slashes from result so the boundary
+                // collapses to whatever leading slashes the new arg brings.
+                while result.hasSuffix("/") { result.removeLast() }
+                result += arg
+            } else if result.hasSuffix("/") {
+                // Boundary already has a separator; just concatenate.
+                result += arg
+            } else {
+                // Neither side has a separator; insert one.
+                result += "/"
+                result += arg
             }
         }
-
         return result
     }
 
