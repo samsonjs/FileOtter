@@ -6,14 +6,15 @@
 //
 
 @testable import FileOtter
-import XCTest
+import Foundation
+import Testing
 
-final class FileTypeTests: XCTestCase {
-    var tempDir: URL!
-    var testFile: URL!
-    var testDir: URL!
+@Suite final class FileTypeTests {
+    let tempDir: URL
+    let testFile: URL
+    let testDir: URL
 
-    override func setUpWithError() throws {
+    init() throws {
         tempDir = URL.temporaryDirectory
             .appendingPathComponent("FileTypeTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -25,237 +26,194 @@ final class FileTypeTests: XCTestCase {
         try FileManager.default.createDirectory(at: testDir, withIntermediateDirectories: true)
     }
 
-    override func tearDownWithError() throws {
-        if FileManager.default.fileExists(atPath: tempDir.path) {
-            try FileManager.default.removeItem(at: tempDir)
-        }
+    deinit {
+        try? FileManager.default.removeItem(at: tempDir)
     }
 
     // MARK: - Existence Tests
 
-    func testExists() throws {
-        // Test with existing file
-        XCTAssertTrue(File.exists(testFile))
-
-        // Test with existing directory
-        XCTAssertTrue(File.exists(testDir))
-        XCTAssertTrue(File.exists(tempDir))
+    @Test func exists() {
+        #expect(File.exists(testFile))
+        #expect(File.exists(testDir))
+        #expect(File.exists(tempDir))
     }
 
-    func testExistsForNonExistent() throws {
+    @Test func existsForNonExistent() {
         let nonExistent = tempDir.appendingPathComponent("does-not-exist.txt")
-        XCTAssertFalse(File.exists(nonExistent))
+        #expect(!File.exists(nonExistent))
 
         let nonExistentDir = tempDir.appendingPathComponent("no-such-dir")
-        XCTAssertFalse(File.exists(nonExistentDir))
+        #expect(!File.exists(nonExistentDir))
     }
 
-    func testExistsForDirectory() throws {
+    @Test func existsForDirectory() {
         // File.exists returns true for directories (like Ruby)
-        XCTAssertTrue(File.exists(tempDir))
-        XCTAssertTrue(File.exists(testDir))
+        #expect(File.exists(tempDir))
+        #expect(File.exists(testDir))
 
         // Also test system directories
-        XCTAssertTrue(File.exists(URL(fileURLWithPath: "/tmp")))
-        XCTAssertTrue(File.exists(URL(fileURLWithPath: "/")))
+        #expect(File.exists(URL(fileURLWithPath: "/tmp")))
+        #expect(File.exists(URL(fileURLWithPath: "/")))
     }
 
     // MARK: - File Type Tests
 
-    func testIsFile() throws {
-        // Returns true for regular files
-        XCTAssertTrue(File.isFile(testFile))
+    @Test func isFile() throws {
+        #expect(File.isFile(testFile))
 
-        // Create another test file
         let anotherFile = tempDir.appendingPathComponent("another.txt")
         try "content".write(to: anotherFile, atomically: true, encoding: .utf8)
-        XCTAssertTrue(File.isFile(anotherFile))
+        #expect(File.isFile(anotherFile))
     }
 
-    func testIsFileForDirectory() throws {
-        // Returns false for directories
-        XCTAssertFalse(File.isFile(testDir))
-        XCTAssertFalse(File.isFile(tempDir))
-        XCTAssertFalse(File.isFile(URL(fileURLWithPath: "/")))
+    @Test func isFileForDirectory() {
+        #expect(!File.isFile(testDir))
+        #expect(!File.isFile(tempDir))
+        #expect(!File.isFile(URL(fileURLWithPath: "/")))
 
-        // Returns false for non-existent paths
         let nonExistent = tempDir.appendingPathComponent("no-such-file.txt")
-        XCTAssertFalse(File.isFile(nonExistent))
+        #expect(!File.isFile(nonExistent))
     }
 
-    func testIsDirectory() throws {
-        // Returns true for directories
-        XCTAssertTrue(File.isDirectory(testDir))
-        XCTAssertTrue(File.isDirectory(tempDir))
-        XCTAssertTrue(File.isDirectory(URL(fileURLWithPath: "/")))
-        XCTAssertTrue(File.isDirectory(URL(fileURLWithPath: "/tmp")))
+    @Test func isDirectory() {
+        #expect(File.isDirectory(testDir))
+        #expect(File.isDirectory(tempDir))
+        #expect(File.isDirectory(URL(fileURLWithPath: "/")))
+        #expect(File.isDirectory(URL(fileURLWithPath: "/tmp")))
     }
 
-    func testIsDirectoryForFile() throws {
-        // Returns false for files
-        XCTAssertFalse(File.isDirectory(testFile))
+    @Test func isDirectoryForFile() {
+        #expect(!File.isDirectory(testFile))
 
-        // Returns false for non-existent paths
         let nonExistent = tempDir.appendingPathComponent("no-such-dir")
-        XCTAssertFalse(File.isDirectory(nonExistent))
+        #expect(!File.isDirectory(nonExistent))
     }
 
-    func testIsSymlink() throws {
-        // Create symlink to test file
+    @Test func isSymlink() throws {
         let symlinkURL = tempDir.appendingPathComponent("symlink.txt")
         try FileManager.default.createSymbolicLink(at: symlinkURL, withDestinationURL: testFile)
-        XCTAssertTrue(File.isSymlink(symlinkURL))
+        #expect(File.isSymlink(symlinkURL))
 
-        // Create symlink to directory
         let dirSymlinkURL = tempDir.appendingPathComponent("dirlink")
         try FileManager.default.createSymbolicLink(at: dirSymlinkURL, withDestinationURL: testDir)
-        XCTAssertTrue(File.isSymlink(dirSymlinkURL))
+        #expect(File.isSymlink(dirSymlinkURL))
     }
 
-    func testIsSymlinkForRegularFile() throws {
-        // Regular files are not symlinks
-        XCTAssertFalse(File.isSymlink(testFile))
+    @Test func isSymlinkForRegularFile() {
+        #expect(!File.isSymlink(testFile))
+        #expect(!File.isSymlink(testDir))
 
-        // Directories are not symlinks
-        XCTAssertFalse(File.isSymlink(testDir))
-
-        // Non-existent paths are not symlinks
         let nonExistent = tempDir.appendingPathComponent("nonexistent")
-        XCTAssertFalse(File.isSymlink(nonExistent))
+        #expect(!File.isSymlink(nonExistent))
     }
 
-    func testIsBlockDevice() throws {
-        // Block devices are rare on macOS, but /dev/disk* exists
-        // This test might fail in sandboxed environments
+    @Test func isBlockDevice() {
+        // Block devices are rare on macOS, but /dev/disk* exists.
+        // This test might fail in sandboxed environments.
         if FileManager.default.fileExists(atPath: "/dev/disk0") {
-            XCTAssertTrue(File.isBlockDevice(URL(fileURLWithPath: "/dev/disk0")))
+            #expect(File.isBlockDevice(URL(fileURLWithPath: "/dev/disk0")))
         }
 
-        // Regular files are not block devices
-        XCTAssertFalse(File.isBlockDevice(testFile))
-        XCTAssertFalse(File.isBlockDevice(testDir))
+        #expect(!File.isBlockDevice(testFile))
+        #expect(!File.isBlockDevice(testDir))
     }
 
-    func testIsCharDevice() throws {
-        // /dev/null is always a character device
+    @Test func isCharDevice() {
         let devNull = URL(fileURLWithPath: "/dev/null")
-        XCTAssertTrue(File.isCharDevice(devNull))
+        #expect(File.isCharDevice(devNull))
 
-        // /dev/random is also a character device
         let devRandom = URL(fileURLWithPath: "/dev/random")
         if FileManager.default.fileExists(atPath: devRandom.path) {
-            XCTAssertTrue(File.isCharDevice(devRandom))
+            #expect(File.isCharDevice(devRandom))
         }
 
-        // Regular files are not character devices
-        XCTAssertFalse(File.isCharDevice(testFile))
-        XCTAssertFalse(File.isCharDevice(testDir))
+        #expect(!File.isCharDevice(testFile))
+        #expect(!File.isCharDevice(testDir))
     }
 
-    func testIsPipe() throws {
-        // Creating FIFOs requires mkfifo system call
-        // Skip this test for now as it requires additional implementation
-        // Regular files are not pipes
-        XCTAssertFalse(File.isPipe(testFile))
-        XCTAssertFalse(File.isPipe(testDir))
+    @Test func isPipe() {
+        // Creating FIFOs requires mkfifo; skip exercising real pipes here.
+        #expect(!File.isPipe(testFile))
+        #expect(!File.isPipe(testDir))
     }
 
-    func testIsSocket() throws {
-        // Unix domain sockets are rare and hard to create in tests
-        // Regular files are not sockets
-        XCTAssertFalse(File.isSocket(testFile))
-        XCTAssertFalse(File.isSocket(testDir))
+    @Test func isSocket() {
+        // Unix domain sockets are rare and hard to create in tests.
+        #expect(!File.isSocket(testFile))
+        #expect(!File.isSocket(testDir))
     }
 
     // MARK: - Empty/Zero Tests
 
-    func testIsEmpty() throws {
-        // Create empty file
+    @Test func isEmpty() throws {
         let emptyFile = tempDir.appendingPathComponent("empty.txt")
         try "".write(to: emptyFile, atomically: true, encoding: .utf8)
-        XCTAssertTrue(try File.isEmpty(emptyFile))
+        #expect(try File.isEmpty(emptyFile))
     }
 
-    func testIsEmptyForNonEmpty() throws {
-        // testFile has content
-        XCTAssertFalse(try File.isEmpty(testFile))
+    @Test func isEmptyForNonEmpty() throws {
+        #expect(try !File.isEmpty(testFile))
 
-        // Create another non-empty file
         let nonEmptyFile = tempDir.appendingPathComponent("nonempty.txt")
         try "Some content".write(to: nonEmptyFile, atomically: true, encoding: .utf8)
-        XCTAssertFalse(try File.isEmpty(nonEmptyFile))
+        #expect(try !File.isEmpty(nonEmptyFile))
     }
 
-    func testIsEmptyThrowsForNonExistent() throws {
+    @Test func isEmptyThrowsForNonExistent() {
         let nonExistent = tempDir.appendingPathComponent("does-not-exist.txt")
-        XCTAssertThrowsError(try File.isEmpty(nonExistent))
+        #expect(throws: (any Error).self) {
+            try File.isEmpty(nonExistent)
+        }
     }
 
-    func testIsZero() throws {
-        // Create empty file
+    @Test func isZero() throws {
         let emptyFile = tempDir.appendingPathComponent("zero.txt")
         try "".write(to: emptyFile, atomically: true, encoding: .utf8)
 
         // isZero is alias for isEmpty
-        XCTAssertTrue(try File.isZero(emptyFile))
-        XCTAssertFalse(try File.isZero(testFile))
+        #expect(try File.isZero(emptyFile))
+        #expect(try !File.isZero(testFile))
     }
 
     // MARK: - ftype Tests
 
-    func testFtypeForFile() throws {
-        XCTAssertEqual(File.ftype(testFile), .file)
+    @Test func ftypeForFile() throws {
+        #expect(File.ftype(testFile) == .file)
 
-        // Create another file to test
         let anotherFile = tempDir.appendingPathComponent("another.dat")
         try Data().write(to: anotherFile)
-        XCTAssertEqual(File.ftype(anotherFile), .file)
+        #expect(File.ftype(anotherFile) == .file)
     }
 
-    func testFtypeForDirectory() throws {
-        XCTAssertEqual(File.ftype(testDir), .directory)
-        XCTAssertEqual(File.ftype(tempDir), .directory)
-        XCTAssertEqual(File.ftype(URL(fileURLWithPath: "/")), .directory)
+    @Test func ftypeForDirectory() {
+        #expect(File.ftype(testDir) == .directory)
+        #expect(File.ftype(tempDir) == .directory)
+        #expect(File.ftype(URL(fileURLWithPath: "/")) == .directory)
     }
 
-    func testFtypeForSymlink() throws {
+    @Test func ftypeForSymlink() throws {
         let symlinkURL = tempDir.appendingPathComponent("link.txt")
         try FileManager.default.createSymbolicLink(at: symlinkURL, withDestinationURL: testFile)
-        XCTAssertEqual(File.ftype(symlinkURL), .link)
+        #expect(File.ftype(symlinkURL) == .link)
 
-        // Symlink to directory
         let dirSymlinkURL = tempDir.appendingPathComponent("dirlink")
         try FileManager.default.createSymbolicLink(at: dirSymlinkURL, withDestinationURL: testDir)
-        XCTAssertEqual(File.ftype(dirSymlinkURL), .link)
+        #expect(File.ftype(dirSymlinkURL) == .link)
     }
 
-    func testFtypeForCharDevice() throws {
-        // /dev/null is a character device
+    @Test func ftypeForCharDevice() {
         let devNull = URL(fileURLWithPath: "/dev/null")
-        XCTAssertEqual(File.ftype(devNull), .characterSpecial)
+        #expect(File.ftype(devNull) == .characterSpecial)
     }
 
-    func testFtypeForBlockDevice() throws {
-        // Block devices are rare on macOS
-        // This test might fail in sandboxed environments
+    @Test func ftypeForBlockDevice() {
         if FileManager.default.fileExists(atPath: "/dev/disk0") {
-            XCTAssertEqual(File.ftype(URL(fileURLWithPath: "/dev/disk0")), .blockSpecial)
+            #expect(File.ftype(URL(fileURLWithPath: "/dev/disk0")) == .blockSpecial)
         }
     }
 
-    func testFtypeForFifo() throws {
-        // FIFOs require special creation
-        // Skip for now
-    }
-
-    func testFtypeForSocket() throws {
-        // Sockets require special creation
-        // Skip for now
-    }
-
-    func testFtypeForUnknown() throws {
-        // Non-existent files return unknown
+    @Test func ftypeForUnknown() {
         let nonExistent = tempDir.appendingPathComponent("nonexistent")
-        XCTAssertEqual(File.ftype(nonExistent), .unknown)
+        #expect(File.ftype(nonExistent) == .unknown)
     }
 }
