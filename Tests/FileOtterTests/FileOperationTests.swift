@@ -230,8 +230,15 @@ final class FileOperationTests: XCTestCase {
     }
 
     func testInstanceTruncate() throws {
-        // Skip for now as it requires File instance implementation
-        throw XCTSkip("Instance methods not yet implemented")
+        try "hello, world".write(to: sourceFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try File.size(sourceFile), 12)
+
+        let file = try File(url: sourceFile, mode: .readWrite)
+        defer { try? file.close() }
+        try file.truncate(to: 5)
+
+        XCTAssertEqual(try File.size(sourceFile), 5)
+        XCTAssertEqual(try String(contentsOf: sourceFile, encoding: .utf8), "hello")
     }
 
     // MARK: - Touch Tests

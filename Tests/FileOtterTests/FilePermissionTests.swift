@@ -228,8 +228,12 @@ final class FilePermissionTests: XCTestCase {
     }
 
     func testInstanceChmod() throws {
-        // Skip for now as it requires File instance implementation
-        throw XCTSkip("Instance methods not yet implemented")
+        let file = try File(url: testFile, mode: .readWrite)
+        defer { try? file.close() }
+        try file.chmod(0o600)
+
+        let stat = try File.fileStatus(testFile)
+        XCTAssertEqual(stat.mode & 0o777, 0o600)
     }
 
     // MARK: - chown Tests
@@ -302,8 +306,16 @@ final class FilePermissionTests: XCTestCase {
     }
 
     func testInstanceChown() throws {
-        // Skip for now as it requires File instance implementation
-        throw XCTSkip("Instance methods not yet implemented")
+        // Chowning to a different uid usually requires root, so just verify
+        // that chowning to the current uid/gid (a no-op) succeeds and
+        // ownership is unchanged.
+        let before = try File.fileStatus(testFile)
+        let file = try File(url: testFile, mode: .readWrite)
+        defer { try? file.close() }
+        try file.chown(owner: before.uid, group: before.gid)
+        let after = try File.fileStatus(testFile)
+        XCTAssertEqual(after.uid, before.uid)
+        XCTAssertEqual(after.gid, before.gid)
     }
 
     // MARK: - umask Tests

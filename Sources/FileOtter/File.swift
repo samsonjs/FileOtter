@@ -108,16 +108,30 @@ public class File: CustomStringConvertible, CustomDebugStringConvertible {
 
     // MARK: - Instance Methods
 
-    public func chmod(_: Int) throws {
-        fatalError("Not implemented")
+    public func chmod(_ permissions: Int) throws {
+        guard fchmod(fd, mode_t(permissions)) == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    public func chown(owner _: Int? = nil, group _: Int? = nil) throws {
-        fatalError("Not implemented")
+    public func chown(owner: Int? = nil, group: Int? = nil) throws {
+        var current = stat()
+        if owner == nil || group == nil {
+            guard fstat(fd, &current) == 0 else {
+                throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: url.path])
+            }
+        }
+        let newOwner = owner.map { uid_t($0) } ?? current.st_uid
+        let newGroup = group.map { gid_t($0) } ?? current.st_gid
+        guard fchown(fd, newOwner, newGroup) == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
-    public func truncate(to _: Int) throws {
-        fatalError("Not implemented")
+    public func truncate(to size: Int) throws {
+        guard ftruncate(fd, off_t(size)) == 0 else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
     }
 
     public func flock(_ operation: LockOperation, nonBlocking: Bool = false) throws {
